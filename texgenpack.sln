@@ -1,0 +1,26 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual C++ Express 2010
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "texgenpack", "texgenpack.vcxproj", "{9497C7AC-6366-4FA5-8AA2-143C99F1CBA5}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "texview", "texview\texview.vcxproj", "{66020A2C-3CDA-4EA8-9D0C-3C1F91253227}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{9497C7AC-6366-4FA5-8AA2-143C99F1CBA5}.Debug|Win32.ActiveCfg = Debug|Win32
+		{9497C7AC-6366-4FA5-8AA2-143C99F1CBA5}.Debug|Win32.Build.0 = Debug|Win32
+		{9497C7AC-6366-4FA5-8AA2-143C99F1CBA5}.Release|Win32.ActiveCfg = Release|Win32
+		{9497C7AC-6366-4FA5-8AA2-143C99F1CBA5}.Release|Win32.Build.0 = Release|Win32
+		{66020A2C-3CDA-4EA8-9D0C-3C1F91253227}.Debug|Win32.ActiveCfg = Debug|Win32
+		{66020A2C-3CDA-4EA8-9D0C-3C1F91253227}.Debug|Win32.Build.0 = Debug|Win32
+		{66020A2C-3CDA-4EA8-9D0C-3C1F91253227}.Release|Win32.ActiveCfg = Release|Win32
+		{66020A2C-3CDA-4EA8-9D0C-3C1F91253227}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

@@ -1,0 +1,103 @@
+
+Version 0.6.1
+
+- Update window less often in Windows version of viewer program to improve compression speed.
+- Support for 8-bit and 16-bit images and texture formats with one or two components.
+- Support for RGTC1/2 (BC4/BC5) unsigned and signed texture compression formats with one or two components.
+- Fix the block compare functions for 16-bit unsigned and signed components.
+- Allow conversion in viewer program between one and two-component 8-bit and 16-bit signed and unsigned image
+  formats.
+- Optimize the bptc_float decode function so that bptc_float compression is 10% faster.
+- Optimize the bptc decode function so that bptc compression is 10% faster.
+- Support using half-float source image for RGB(A)8 compression formats, resulting in higher quality compression
+  if the source image truly has more precision that a regular RGB(A)8 image (i.e. is not just a converted regular
+  image).
+- Similarly, support using a 16-bit one or two component source image for 8-bit component compression formats such
+  as unsigned RGTC1/2.
+- Add more conversion options to the viewer program between 8-bit and 16-bit formats and add an option to extend
+  half-float images from one or two components to three.
+- Allow mipmaps to be generated even when there is already more than one mipmap present.
+- Support generation of mipmaps for 8-bit and 16-bit signed and unsigned formats, and for half-float formats.
+- Improve support for converting images to uncompressed textures.
+
+Version 0.6
+
+- Debug support for calibration of genetic algorithm parameters.
+- Fix difference mode for half-float images in viewer program.
+- Change --fast genetic algorithm parameters: population size 64 instead of 128, 200 generations instead of 100.
+- Implement mode statistics in verbose mode for ETC2 and BPTC_FLOAT.
+- Implement modal optimization (specific modes tied to islands) for BPTC_FLOAT compression, resulting in quality
+  improvement.
+- Implement adaptive optimization, the GA is run twice as long when the RMSE of a block is above a certain threshold.
+- Add --hdr option for gamma corrected HDR half-float texture compression. Optimize half-float comparison functions
+  using tables.
+- Change compare_images to use the same block comparison functions used during compression.
+- Fix bptc_signed_float (bc6h_sf16) decoding and compression.
+- Added menu items to remove or add alpha component in viewer program.
+- Fix R11_EAC and RG11_EAC compression and provide menu items to convert to r16 or rg16 format in viewer program.
+- Add HDR display settings dialog to viewer program.
+
+Version 0.5.1
+
+- Correct typo in glInternalFormat id for DXT1.
+- Fix major bug in writing DDS files (Caps field wasn't properly written).
+- Properly support uncompressed DDS files with a DX10 header.
+- Fix loading of uncompressed DDS textures.
+- Finally fix BPTC (BC7) compression and decompression.
+- Fix BPTC_FLOAT (BC6H) compression and decompression.
+
+Version 0.5
+
+- Make distinction between encoding and decoding in decoding functions. This can be relevant for behaviour being exactly
+  according to specifications.
+- Fix bug in half-float conversion.
+- Port to Windows (Visual C++ or MinGW).
+- Fix byte order check bug in dxtc.c.
+- Fix alpha handling in BPTC compression.
+
+Version 0.4
+
+- Support for the high quality BPTC (BC7) 128-bit format.
+- Support some more PC formats in .ktx files.
+- Added a table of texture format information and use it in various places. This should allow more formats to be
+  read and written.
+- Make the --decompress command more versatile by allowing decompression to uncompressed texture files with optional
+  mipmaps instead of images only.
+- Split block comparison function into own source file.
+- Support half-float internal image format for compression and comparison (previously the only internal image format was
+  32-bit RGBA).
+- Work-in-progress on BPTC_FLOAT (BC6H).
+- Implement mipmap generation for power-of-two half-float textures.
+- Fix bug in --ultra mode when the texture width was not a multiple of the block size.
+- Add simple texture file viewer program "texview" using GTK+ 3.
+
+Version 0.3
+
+- Tweaked the GA parameters (mutation rate) for 128-bit block compression, improving quality.
+- Added DXT3 and DXT5 compression.
+- Added support for loading/saving multiple mipmap levels for DDS files.
+- Added manual optimizing of alpha values for texture types with a limited alpha range (DXT3 and ETC2 punchthrough).
+- During mipmap generation no longer blend alpha values in 1-bit (on/off) alpha images.
+- Add --generations and --islands options for custom speed settings.
+- When comparing pixels where both alpha components are zero, disregard the difference in RGB colors. This improves the
+  quality of compressed textures with sharp alpha transitions.
+- Preliminary support for one channel (R11_EAC) and dual channel (RG11_EAC) texture formats and their signed variants.
+- Added --flip-vertical and --quiet options.
+- Split some source files.
+- Added support for sRGB ETC2 textures. They are treated as regular RGB textures by the compressor, except for mipmap
+  generation.
+- Use uint64_t in <stdint.h> for 64-bit unsigned integers.
+- Generalized block size (although it is currently 4x4 for all supported formats in the GA).
+- Reported RMSE and PSNR was slightly off due to calculation error (the number of pixels was taken as the extended
+  dimensions, not the real dimensions), now fixed.
+- Support for decompression of half-float RGB and RGBA textures as well packed-pixel uncompressed textures from .ktx
+  files.
+- Support for conversion (via "compression") to uncompressed packed-pixel RGB and RGBA and half-float RGB and RGBA and
+  storing them in .ktx files.
+- Support for compressing a texture file that already contains mipmaps.
+- Fix bugs in .pkm file loading.
+- Preliminary support for ASTC file conversion via ARM's encoder via system shell commands to and from .ktx files and
+  to and from ARM's atsc format.
+- Support for some uncompressed .dds formats.
+
+

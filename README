@@ -1,0 +1,188 @@
+
+texgenpack v0.6.1 -- a texture compressor using a genetic algorithm.
+
+This program is texture compressor and conversion utility that uses
+the GA implementation in libfgen to compress textures. It doesn't use the
+fastest possible method, but is robust and inherently multi-threaded to use
+all available cores in the CPU. The program can also convert to and from
+several compressed and uncompressed texture formats and file types such as
+KTX and DDS, including support for multiple mipmaps and automatic mipmap
+generation.
+
+It supports both Linux and Windows. For Windows instructions, see below.
+
+The following texture formats are supported:
+
+- ETC1, the mobile standard and compatible with the new standardized ETC2
+  format in OpenGL 4.3 and OpenGL ES 3.0.
+- ETC2, an improved version of ETC1. RGB8 as well as RGBA8 and RGB8 with
+  punchthrough alpha are supported.
+- Preliminary support for one or two component textures (stored as one or
+  two 16-bit values in an image file): R11_EAC and RG11_EAC and their signed
+  variants.
+- DXT1, DXT3, DXT5 and DXT1A (also known as BC1/2/3).
+- ASTC via ARM's encoder.
+- BPTC (BC7).
+- BPTC_FLOAT and BPTC_SIGNED_FLOAT (BC6H_UF16 and BC6H_SF16) for both linear
+  and HDR textures.
+
+The following file formats are supported:
+
+- KTX, an OpenGL standard, multiple mipmap levels supported with multitude
+  of texture formats.
+- PKM, for ETC textures containing a single mipmap level.
+- DDS, for DXTC, BPTC or uncompressed textures, multiple mipmap levels
+  supported.
+
+PNG is the only supported image format. You'll have to convert images to PNG
+before using the compress function (you can also use KTX or DDS files as
+source).
+
+The program supports compression, decompression and comparison of image files
+and textures, reporting RMSE and PSNR statistics of the difference between
+images, and handles mipmaps.
+
+Because of the general nature of the method used, it is relatively easy to add
+new compression formats to the code; only a decompression function is required
+to enable compression of that format.
+
+Requirements:
+
+	libpng
+	libfgen (available on SourceForge, version >= 0.1.14 recommended)
+
+Run texgenpack without arguments for instructions.
+
+Basically, one command should be specified as the first argument, either
+--compress, --decompress or --compare. The last two arguments on the command
+line should be the source and destination files in that order. Various options
+are available, including the speed settings --ultra, --fast (default),
+--medium and --slow. Use --format to select the format for compression (the
+default when the destination is a KTX or PKM file is ETC1, for DDS it is
+DXT1). The --progress option will display a progress percentage as the
+algorithm runs.
+
+Examples:
+
+	texgenpack --compress --format etc2_rgb8 --progress image.png texture.ktx
+	texgenpack --compare image.png texture.ktx
+	texgenpack --decompress texture.ktx decompressed.png
+
+Formats supported by the --format option include:
+
+	- "etc1": ETC1, an RGB8 format. 64-bit per block (4x4 pixels).
+	- "etc2_rgb8": The ETC2 RGB8 format that is backwards compatible with
+          ETC1. 64-bit.
+	- "etc2_eac": The ETC2 RGBA8 format with alpha values ranging from 0
+          to 255. 128-bit blocks.
+	- "etc2_punchthrough": RGB8 + alpha that is either on or off (0 or
+	  255). 64-bit blocks.
+	- "dxt1": RGB8, the most used standard on PCs.
+	- "dxt3": RGBA8.
+	- "dxt5": RGBA8.
+	- "dxt1a": Variant of DXT1 with on/off alpha. When decompressing or
+	  comparing a DDS file containing a DXT1A texture the option --format
+	  dxt1a should be specified.
+	- "r11_eac": A single 16-bit component. Stored in the lower 16-bits
+          (R and G) with little endian byte order of a 32-bit pixel of a PNG
+	  image with alpha.
+	- "rg11_eac": Two 16-bit components. Stored as two 16-bit values,
+          in the lower (R and G) and upper (B and alpha) 16-bits of a PNG
+          image with alpha.
+	- "signed_r11_eac": A single signed 16-bit component.
+	- "signed_rg11_eac": Two signed 16-bit components.
+	- "rgb8": Uncompressed RGB8.
+	- "rgba8": Uncompressed RGBA8.
+	- "rgb_half_float": Uncompressed format where each color component is
+	  stored in a 16-bits floating point number.
+	- "rgba_half_float": Includes alpha.
+	- "bptc": High quality recent 128-bit compressed format, also known
+           as BC7. Supports alpha.
+	- "bptc_float": Half-float RGB format, also known as BC6H_UF16. --hdr
+	  option supported for HDR textures.
+	- "bptc_signed_float": Signed half-float format, also known as
+	   BC6H_SF16.
+	- "rgtc1": Single-channel (red) compression format. Equivalent to BC4.
+	- "rgtc2": Two channel (red/green) compression format. Equivalent to
+	   BC5.
+	- "signed_rgtc1": Signed version of RGTC1.
+	- "signed_rgtc2 : Signed version of RGTC2.
+
+The program supports the use of higher precision source formats than the base
+format of the compression format. For example, it is possible to use half-
+float images or textures as a source for 8-bit RGB compression formats.
+Provided the source image does indeed have higher precision (and is not just
+an 8-bit image converted to half-float format), this should result in improved
+quality. The same applies to the use of 16-bit source formats for one or two
+component compression with RGTC.
+
+Speed settings:
+
+	--ultra: The fastest setting. Eight GAs are run concurrently for
+	  different blocks. Population size is 256, number of generations is
+          100. Supports the --generations and --islands options.
+	--fast: The default setting. Four GAs are run concurrently for the
+	  same block for 200 generations. Population size is 64. The best
+	  solution out of the four is chosen. Can be customized with the
+	  --generations and --islands options.
+	--medium: Eight Gas are run concurrently for the same block for 200
+          generations. Population size is 128. Supports the --generations and
+	  --islands options.
+	--slow: Sixteen GAs are run concurrently for the same block for 500
+	  generations. Population size is 128. Supports the --generations and
+	  --islands options.
+
+The graphical viewer and compression program texview uses GTK+ 2 or 3. It
+accepts zero, one or two image or texture filenames as arguments.
+
+Some comments:
+
+- The compression is fairly slow at the default setting (--fast). The --ultra
+  setting is faster but sacrifices quality. The higher quality settings
+  --medium and --slow produce good quality but are slow.
+- The code has not been tested on big-endian systems although they are
+  supported. Loading of KTX files created on a big-endian system should work
+  correctly.
+- The ETC1 and ETC2 RGB8 compression has been debugged, and seems work
+  correctly. I'd like to hear about any incompabilities.
+- There is an option (--mipmaps) to automatically generate mipmap levels
+  both for power-of-two and non-power-of-two textures, and save them in a
+  KTX or DDS file. The quality of the results has not been extensively
+  verified.
+- The program can be used to generate or extract mipmaps with or without
+  compression or decompression.
+- Because of the nature of the algorithm, which only requires a decoding
+  function of a particular compression format to perform compression, this
+  program could help to evaluate or research texture compression schemes in
+  general.
+
+Also included is the viewer program texview which can view, compare and also
+compress all formats that texgenpack handles. It has zooming support,
+support for showing differences between textures/images, and support for HDR
+textures. It requires GTK+ 3 or GTK+ 2 to build.
+
+**** Windows instructions ****
+
+The supplied 32-bit texgenpack.exe (in the Release directory) was built with
+Visual C++ 2010 with static libary versions of libfgen and libpng 1.60. As
+such, the only requirements are the presence of the C run-time library
+msvcrt100.dll and pthreadVC2.dll from the pthread-win32 project. The latter
+file can be found on the pthread_win32 site project's pages at
+http://sourceware.org/pthreads-win32/. It is also included in the libfgen
+distribution.
+
+A Visual C++ 2010 project file is also provided. To build the texview program,
+a Windows GTK 2 or 3 installation is required and there are some details to
+consider. The GTK installation may provide header and .lib files for libpng.
+Because the older C run-time msvcrt.dll, linked with the "official" GTK 2
+Windows distribution, conflicts with the msvcrt100.dll found in Visual C++
+2010, use of that GTK distribution is not recommended unless you are able to
+compile libfgen and texview itself with an old version of Visual C++ so that
+only msvcrt.dll is used.
+
+Because the program uses 64-bit instructions extensively in some compression
+modes, compiling a 64-bit version should result in marked performance
+improvement on 64-bit systems.
+
+The author can be reached at fgenfb at yahoo.com.
+
