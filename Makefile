@@ -1,5 +1,9 @@
+# Makefile for texgenpack.
 
-CFLAGS = -std=gnu99 -O2
+# Target directory when installing.
+INSTALL_DIR = /usr/bin
+
+CFLAGS = -std=gnu99 -Ofast
 LFLAGS = -O
 #CFLAGS = -std=gnu99 -ggdb
 #LFLAGS = -ggdb
@@ -19,6 +23,10 @@ texgenpack : $(TEXGENPACK_MODULE_OBJECTS) $(SHARED_MODULE_OBJECTS)
 
 texview/texview : $(TEXVIEW_MODULE_OBJECTS) $(SHARED_MODULE_OBJECTS)
 	$(CC) $(LFLAGS) $(TEXVIEW_MODULE_OBJECTS) $(SHARED_MODULE_OBJECTS) -o texview/texview -lm -lpng -lfgen -lpthread $(PKG_CONFIG_LFLAGS)
+
+install : texgenpack texview/texview
+	install -m 0755 texgenpack $(INSTALL_DIR)/texgenpack
+	install -m 0755 texview/texview $(INSTALL_DIR)/texview
 
 clean :
 	rm -f $(TEXGENPACK_MODULE_OBJECTS) $(TEXVIEW_MODULE_OBJECTS) $(SHARED_MODULE_OBJECTS)

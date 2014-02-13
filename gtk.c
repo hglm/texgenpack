@@ -322,6 +322,38 @@ static void menu_item_generate_mipmaps_activate_cb(GtkMenuItem *menu_item, gpoin
 
 static int mipmap_level_being_compressed;
 static int stop_compression;
+static double compress_start_time;
+static double last_compress_progress_time;
+static double compress_progress; // [0, 1]
+static const double compression_update_frequency_table[5] =
+	{ 1.0 / 60.0, 0.1, 1, 10.0, 1E40 };
+// Update screen at most every 1.0 seconds during compression by default.
+// (Some GTK implementations, such as under Windows, may be slow, while GUI updates
+// for large textures may impact compression speed on any system since the whole
+// texture is potentially scaled/redrawn with cairo).
+#ifdef _WIN32
+static int compression_update_frequency_selection = 2;
+#else
+static int compression_update_frequency_selection = 2;
+#endif
+
+// Calculate progress and return true if the window needs to be updated.
+
+static int calculate_progress(Texture *texture, int compressed_block_index) {
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	double current_time = tv.tv_sec + tv.tv_usec * 0.000001;
+	if (current_time - last_compress_progress_time >=
+	compression_update_frequency_table[compression_update_frequency_selection]) {
+		compress_progress = (double)compressed_block_index /
+			((texture->extended_height / texture->block_height) *
+			(texture->extended_width / texture->block_width));
+		last_compress_progress_time = current_time;
+		return 1;
+	}
+	return 0;
+}
+
 
 // This function is called by the compress function after each compressed block.
 
@@ -351,19 +383,10 @@ static void compress_callback(BlockUserData *user_data) {
 				pack_rgba(pixel_get_b(pixel), pixel_get_g(pixel), pixel_get_r(pixel),
 						pixel_get_a(pixel));
 		}
-#ifdef _WIN32
-	// GTK window updates in Windows are slower, update less often.
-	if ((option_speed == SPEED_ULTRA && (x & 31) == 28) ||
-	(option_speed == SPEED_FAST && (x & 31) == 28) ||
-	(option_speed == SPEED_MEDIUM && (x & 15) == 12)
-	|| option_speed == SPEED_SLOW) {
+        if (calculate_progress(texture, compressed_block_index)) {
 		gui_create_base_surface(1);
 		gui_draw_and_show_window();
 	}
-#else
-	gui_create_base_surface(1);
-	gui_draw_and_show_window();
-#endif
 	gui_handle_events();
 	if (stop_compression)
 		user_data->stop_signalled = 1;
@@ -396,11 +419,7 @@ static void compress_half_float_callback(BlockUserData *user_data) {
 				current_image[1][mipmap_level_being_compressed].extended_width + (x + j)) * 2] =
 				pixel64;
 		}
-	// Converting images from half-float is slow, update less in fast compression modes.
-	if ((option_speed == SPEED_ULTRA && (x & 31) == 28) ||
-	(option_speed == SPEED_FAST && (x & 31) == 28) ||
-	(option_speed == SPEED_MEDIUM && (x & 15) == 12)
-	|| option_speed == SPEED_SLOW) {
+        if (calculate_progress(texture, compressed_block_index)) {
 		gui_create_base_surface(1);
 		gui_draw_and_show_window();
 	}
@@ -435,19 +454,10 @@ static void compress_rg16_callback(BlockUserData *user_data) {
 				current_image[1][mipmap_level_being_compressed].extended_width + (x + j)] =
 				pixel;
 		}
-#ifdef _WIN32
-	// GTK window updates in Windows are slower, update less often.
-	if ((option_speed == SPEED_ULTRA && (x & 31) == 28) ||
-	(option_speed == SPEED_FAST && (x & 31) == 28) ||
-	(option_speed == SPEED_MEDIUM && (x & 15) == 12)
-	|| option_speed == SPEED_SLOW) {
+       if (calculate_progress(texture, compressed_block_index)) {
 		gui_create_base_surface(1);
 		gui_draw_and_show_window();
 	}
-#else
-	gui_create_base_surface(1);
-	gui_draw_and_show_window();
-#endif
 	gui_handle_events();
 	if (stop_compression)
 		user_data->stop_signalled = 1;
@@ -512,14 +522,7 @@ static void menu_item_compress_activate_cb(GtkMenuItem *menu_item, gpointer data
 
 	compression_active = 1;
 	stop_compression = 0;
-	// Free pixel buffers associated with current_texture[1][i].
-	if (current_file_type[1] & FILE_TYPE_TEXTURE_BIT)
-		for (int i = 0; i < current_nu_mipmaps[1]; i++)
-			free(current_texture[1][i].pixels); 
-	// Free pixel buffers associated with current_image[1][i].
-	if (current_nu_image_sets > 1)
-		for (int i = 0; i < current_nu_mipmaps[1]; i++)
-			free(current_image[1][i].pixels); 
+	destroy_image_set(1);
 	current_file_type[1] = FILE_TYPE_UNDEFINED;
 	for (int i = 0; i < current_nu_mipmaps[0]; i++) {
 		// Allocate and clear image[1][i].
@@ -543,6 +546,11 @@ static void menu_item_compress_activate_cb(GtkMenuItem *menu_item, gpointer data
 		current_nu_mipmaps[1] = i + 1;
 		gui_zoom_fit_to_window();
 		mipmap_level_being_compressed = i;
+		struct timeval tv;
+		gettimeofday(&tv, NULL);
+		compress_start_time = tv.tv_sec + tv.tv_usec * 0.000001;
+		compress_progress = 0;
+		last_compress_progress_time = compress_start_time;
 		if (format & TEXTURE_TYPE_ASTC_BIT) {
 			// Make sure the window shows compression has started.
 			current_file_type[1] = FILE_TYPE_IMAGE_UNKNOWN;
@@ -635,7 +643,8 @@ static void menu_item_flip_vertical_right_activate_cb(GtkMenuItem *menu_item, gp
 	gui_draw_and_show_window();
 }
 
-GtkWidget *file_save_dialog;
+static GtkWidget *file_save_dialog;
+static char *current_filename = NULL;
 
 static void menu_item_save_activate_cb(GtkMenuItem *menu_item, gpointer data) {
 	if (compression_active)
@@ -649,7 +658,47 @@ static void menu_item_save_activate_cb(GtkMenuItem *menu_item, gpointer data) {
 		return;
 	}
 
-	gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(file_save_dialog), "untitled.ktx");
+	const char *extension;
+	TextureInfo *info = match_texture_type(current_texture[1][0].type);
+	// Guess the preferred texture container format.
+	// Check whether saving/loading is supported for KTX or DDS.
+ 	// Usually DDS will be preferable for DXT1/3/5.
+	if (current_texture[1][0].type & TEXTURE_TYPE_DXTC_BIT)
+		extension = "dds";
+	// Otherwise prioritize depending on the platform.
+#ifdef _WIN32
+	else if (info->dds_support)
+		extension = "dds";
+	else if (info->ktx_support)
+		extension = "ktx";
+#else
+	else if (info->ktx_support)
+		extension = "ktx";
+	else if (info->dds_support)
+		extension = "dds";
+#endif
+	// KTX supports most formats (fail-safe).
+	else
+		extension = "ktx";
+	char *filename;
+	if (current_filename == NULL)
+		filename = strdup("untitled.EXT");
+	else {
+		int n = strlen(current_filename);
+		int i;
+		for (i = n - 1; i > 0; i--)
+			if (current_filename[i] == '.')
+				break;
+		if (i == 0)
+			i = n;
+		filename = (char *)malloc(i + 4 + 1);
+		strncpy(filename, current_filename, i);
+		strcpy(&filename[i], ".EXT");
+	}
+	strcpy(&filename[strlen(filename) - 3], extension);
+	gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(file_save_dialog),
+		filename);
+	free(filename);
 again : ;
 	int r = gtk_dialog_run(GTK_DIALOG(file_save_dialog));
 	if (r == GTK_RESPONSE_ACCEPT) {
@@ -699,7 +748,7 @@ again : ;
 	gtk_widget_hide(file_save_dialog);
 }
 
-GtkWidget *file_load_dialog;
+static GtkWidget *file_load_dialog;
 
 static void menu_item_load_activate_cb(GtkMenuItem *menu_item, gpointer data) {
 	if (compression_active)
@@ -741,6 +790,14 @@ again : ;
 			g_free(filename);
 			goto again;
 		}
+		const char *title_str = "texview texture viewer";
+		char *s = (char *)malloc(strlen(filename) + strlen(title_str) + 3 + 1);
+		sprintf(s, "%s (%s)", title_str, filename);
+    		gtk_window_set_title(GTK_WINDOW(gtk_window), s);
+		free(s);
+		if (current_filename != NULL)
+			free(current_filename);
+		current_filename = strdup(filename);
 		g_free(filename);
 		current_rmse[0] = - 1.0;
 		gui_zoom_fit_to_window();
@@ -751,6 +808,16 @@ again : ;
 	gtk_widget_hide(file_load_dialog);
 }
 
+static void menu_item_clear_activate_cb(GtkMenuItem *menu_item, gpointer data) {
+	if (compression_active)
+		return;
+	if (current_nu_image_sets < 2)
+		return;
+	destroy_image_set(1);
+	current_nu_image_sets = 1;
+	gui_zoom_fit_to_window();
+	gui_draw_and_show_window();
+}
 
 static void menu_item_quit_activate_cb(GtkMenuItem *menu_item, gpointer data) {
 	gtk_main_quit();
@@ -1149,6 +1216,7 @@ static void menu_item_hdr_display_settings_activate_cb(GtkMenuItem *menu_item, g
 GtkWidget *compression_settings_dialog;
 GtkWidget *speed_radio_button[4];
 GtkWidget *combo_box_texture_format;
+GtkWidget *update_frequency_radio_button[5];
 
 static void menu_item_compression_settings_activate_cb(GtkMenuItem *menu_item, gpointer data) {
 	if (compression_active) {
@@ -1163,6 +1231,9 @@ static void menu_item_compression_settings_activate_cb(GtkMenuItem *menu_item, g
 	for (int i = 0; i < 4; i++)
 		if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(speed_radio_button[i])))
 			option_speed = i;
+	for (int i = 0; i < 5; i++)
+		if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(update_frequency_radio_button[i])))
+			compression_update_frequency_selection = i;
 	int i = gtk_combo_box_get_active(GTK_COMBO_BOX(combo_box_texture_format));
 	if (i != - 1)
 		option_texture_format = match_texture_description(get_texture_format_index_text(i, 0))->type;
@@ -1190,19 +1261,21 @@ void gui_create_window_layout() {
     GtkWidget *menu_item_compress = gtk_menu_item_new_with_label("Compress");
     g_signal_connect(G_OBJECT(menu_item_compress), "activate",
 	G_CALLBACK(menu_item_compress_activate_cb), NULL);
-    GtkWidget *menu_item_stop_compression = gtk_menu_item_new_with_label("Stop compression");
+    GtkWidget *menu_item_stop_compression = gtk_menu_item_new_with_label("Stop compression (non-resumable)");
     g_signal_connect(G_OBJECT(menu_item_stop_compression), "activate",
 	G_CALLBACK(menu_item_stop_compression_activate_cb), NULL);
     GtkWidget *menu_item_generate_mipmaps = gtk_menu_item_new_with_label("Generate mipmaps");
     g_signal_connect(G_OBJECT(menu_item_generate_mipmaps), "activate",
 	G_CALLBACK(menu_item_generate_mipmaps_activate_cb), NULL);
-    GtkWidget *menu_item_flip_vertical_right = gtk_menu_item_new_with_label("Flip vertically (right image)");
+    GtkWidget *menu_item_flip_vertical_right = gtk_menu_item_new_with_label("Flip result vertically (right image)");
     g_signal_connect(G_OBJECT(menu_item_flip_vertical_right), "activate",
 		G_CALLBACK(menu_item_flip_vertical_right_activate_cb), NULL);
-    GtkWidget *menu_item_load = gtk_menu_item_new_with_label("Load (left image)");
+    GtkWidget *menu_item_load = gtk_menu_item_new_with_label("Load source (left image)");
     g_signal_connect(G_OBJECT(menu_item_load), "activate", G_CALLBACK(menu_item_load_activate_cb), NULL);
-    GtkWidget *menu_item_save = gtk_menu_item_new_with_label("Save (right image)");
+    GtkWidget *menu_item_save = gtk_menu_item_new_with_label("Save result (right image)");
     g_signal_connect(G_OBJECT(menu_item_save), "activate", G_CALLBACK(menu_item_save_activate_cb), NULL);
+    GtkWidget *menu_item_clear = gtk_menu_item_new_with_label("Clear result (right image)");
+    g_signal_connect(G_OBJECT(menu_item_clear), "activate", G_CALLBACK(menu_item_clear_activate_cb), NULL);
     GtkWidget *menu_item_quit = gtk_menu_item_new_with_label("Quit");
     g_signal_connect(G_OBJECT(menu_item_quit), "activate", G_CALLBACK(menu_item_quit_activate_cb), NULL);
     GtkWidget *action_menu = gtk_menu_new();
@@ -1214,6 +1287,7 @@ void gui_create_window_layout() {
     gtk_menu_shell_append(GTK_MENU_SHELL(action_menu), menu_item_flip_vertical_right);
     gtk_menu_shell_append(GTK_MENU_SHELL(action_menu), menu_item_load);
     gtk_menu_shell_append(GTK_MENU_SHELL(action_menu), menu_item_save);
+    gtk_menu_shell_append(GTK_MENU_SHELL(action_menu), menu_item_clear);
     gtk_menu_shell_append(GTK_MENU_SHELL(action_menu), menu_item_quit);
     // Create the menu bar.
     GtkWidget *menu_bar = gtk_menu_bar_new();
@@ -1292,7 +1366,7 @@ void gui_create_window_layout() {
     gtk_menu_shell_append(GTK_MENU_SHELL(left_image_menu), menu_item_convert_to_signed_r8);
     gtk_menu_shell_append(GTK_MENU_SHELL(left_image_menu), menu_item_convert_to_signed_rg8);
     // Create the Left image menu.
-    GtkWidget *left_image_item = gtk_menu_item_new_with_label("Left image");
+    GtkWidget *left_image_item = gtk_menu_item_new_with_label("Source image");
     gtk_menu_item_set_submenu(GTK_MENU_ITEM(left_image_item), left_image_menu);
     gtk_menu_shell_append(GTK_MENU_SHELL(menu_bar), left_image_item);
     // Create the menu items for the Settings menu.
@@ -1368,13 +1442,17 @@ void gui_create_window_layout() {
 		GTK_WINDOW(gtk_window), /*GTK_DIALOG_MODAL | */ GTK_DIALOG_DESTROY_WITH_PARENT,
 		GTK_STOCK_CANCEL, GTK_RESPONSE_REJECT, GTK_STOCK_OK, GTK_RESPONSE_ACCEPT, NULL);
 	GtkWidget *label_speed = gtk_label_new("Compression speed:");
-	speed_radio_button[0] = gtk_radio_button_new_with_label(NULL, "Ultra");
+	speed_radio_button[0] = gtk_radio_button_new_with_label(NULL,
+            "Ultra (lowest quality)");
 	speed_radio_button[1] = gtk_radio_button_new_with_label(
-		gtk_radio_button_get_group(GTK_RADIO_BUTTON(speed_radio_button[0])), "Fast");
+		gtk_radio_button_get_group(GTK_RADIO_BUTTON(speed_radio_button[0])),
+                    "Fast");
 	speed_radio_button[2] = gtk_radio_button_new_with_label(
-		gtk_radio_button_get_group(GTK_RADIO_BUTTON(speed_radio_button[0])), "Medium");
+		gtk_radio_button_get_group(GTK_RADIO_BUTTON(speed_radio_button[0])),
+                    "Medium");
 	speed_radio_button[3] = gtk_radio_button_new_with_label(
-		gtk_radio_button_get_group(GTK_RADIO_BUTTON(speed_radio_button[0])), "Slow");
+		gtk_radio_button_get_group(GTK_RADIO_BUTTON(speed_radio_button[0])),
+                    "Slow (highest quality)");
 	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(speed_radio_button[0]), TRUE);
 	option_speed = SPEED_ULTRA;
 	GtkWidget *content_area = gtk_dialog_get_content_area(GTK_DIALOG(compression_settings_dialog));
@@ -1383,6 +1461,7 @@ void gui_create_window_layout() {
 	gtk_box_pack_start(GTK_BOX(content_area), speed_radio_button[1], FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(content_area), speed_radio_button[2], FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(content_area), speed_radio_button[3], FALSE, FALSE, 0);
+	GtkWidget *label_space = gtk_label_new("");
 	GtkWidget *label_texture_format = gtk_label_new("Texture format:");
 	combo_box_texture_format = gtk_combo_box_text_new();
 	int n = get_number_of_texture_formats();
@@ -1402,16 +1481,40 @@ void gui_create_window_layout() {
 	}
 	gtk_combo_box_set_wrap_width(GTK_COMBO_BOX(combo_box_texture_format), 5);
 	gtk_combo_box_set_active(GTK_COMBO_BOX(combo_box_texture_format), j);
+	gtk_box_pack_start(GTK_BOX(content_area), label_space, FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(content_area), label_texture_format, FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(content_area), combo_box_texture_format, FALSE, FALSE, 0);
 
+	GtkWidget *label_space2 = gtk_label_new("");
+	GtkWidget *label_update_frequency = gtk_label_new("Maximum GUI update frequency:");
+	update_frequency_radio_button[0] = gtk_radio_button_new_with_label(NULL, "60 Hz");
+	update_frequency_radio_button[1] = gtk_radio_button_new_with_label(
+		gtk_radio_button_get_group(GTK_RADIO_BUTTON(update_frequency_radio_button[0])),
+		"10 Hz");
+	update_frequency_radio_button[2] = gtk_radio_button_new_with_label(
+		gtk_radio_button_get_group(GTK_RADIO_BUTTON(update_frequency_radio_button[0])), "Every second");
+	update_frequency_radio_button[3] = gtk_radio_button_new_with_label(
+		gtk_radio_button_get_group(GTK_RADIO_BUTTON(update_frequency_radio_button[0])), "Every 10 seconds");
+	update_frequency_radio_button[4] = gtk_radio_button_new_with_label(
+		gtk_radio_button_get_group(GTK_RADIO_BUTTON(update_frequency_radio_button[0])), "Never");
+
+	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(update_frequency_radio_button[
+		compression_update_frequency_selection]), TRUE);
+	gtk_box_pack_start(GTK_BOX(content_area), label_space2, FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(content_area), label_update_frequency, FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(content_area), update_frequency_radio_button[0], FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(content_area), update_frequency_radio_button[1], FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(content_area), update_frequency_radio_button[2], FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(content_area), update_frequency_radio_button[3], FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(content_area), update_frequency_radio_button[4], FALSE, FALSE, 0);
+
 	// Create the file save dialog.
-	file_save_dialog = gtk_file_chooser_dialog_new("Select a filename to save to.",
+	file_save_dialog = gtk_file_chooser_dialog_new("Select a filename to save to (extension: dds, ktx, pkm or png)",
 		GTK_WINDOW(gtk_window), GTK_FILE_CHOOSER_ACTION_SAVE,
 		GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL, GTK_STOCK_SAVE, GTK_RESPONSE_ACCEPT, NULL);
 	gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER(file_save_dialog), TRUE);
 	// Create the file load dialog.
-	file_load_dialog = gtk_file_chooser_dialog_new("Select a texture or image file to load.",
+	file_load_dialog = gtk_file_chooser_dialog_new("Select a texture or image file to load (extension: dds, ktx, pkm or png)",
 		GTK_WINDOW(gtk_window), GTK_FILE_CHOOSER_ACTION_OPEN,
 		GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL, GTK_STOCK_OPEN, GTK_RESPONSE_ACCEPT, NULL);
 
@@ -1728,6 +1831,28 @@ void gui_draw_window() {
 			cairo_line_to(cr, x - SET_BORDER_WIDTH / 2, window->area_height);
 			cairo_stroke(cr);
 		}
+		// Display ETA when compressing.
+		if (compression_active && j == 1 && compress_progress > 0.000001f) {
+			cairo_move_to(cr, 8 + ((window->area_width - borders_x) / current_nu_image_sets
+				+ SET_BORDER_WIDTH) * j, window->area_height - 6);
+			struct timeval tv;
+			gettimeofday(&tv, NULL);
+			double current_time = tv.tv_sec + tv.tv_usec * 0.000001;
+			int eta = (int)((1 - compress_progress) *
+				(current_time - compress_start_time) / compress_progress);
+			int hours = eta / 3600;
+			int minutes = eta / 60 - hours * 60;
+			int seconds = eta - hours * 3600 - minutes * 60;
+			char s[64];
+			if (hours >= 1.0)
+				sprintf(s, "ETA %dh %dm %ds", hours, minutes, seconds);
+			else if (minutes >= 1.0)
+				sprintf(s, "ETA %dm %ds", minutes, seconds);
+			else
+				sprintf(s, "ETA %ds", seconds);
+			cairo_set_source_rgb(cr, 1, 1, 1);
+			cairo_show_text(cr, s);
+                }
 	}
 
 	cairo_destroy(cr);

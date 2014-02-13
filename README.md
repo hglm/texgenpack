@@ -9,7 +9,7 @@ slowness compared to less general texture compressors.
 
 Primarily developed for Linux, it uses the libfgen genetic algorithm
 library. It also contains a Windows port (which requires some
-configuration to provide pthreads and GTK for GUI).
+configuration to provide pthreads and GTK+ for GUI).
 
 See the file README for more detailed instructions.
 

@@ -1,5 +1,5 @@
 
-texgenpack v0.6.1 -- a texture compressor using a genetic algorithm.
+texgenpack v0.7 -- a texture compressor using a genetic algorithm.
 
 This program is texture compressor and conversion utility that uses
 the GA implementation in libfgen to compress textures. It doesn't use the
@@ -9,7 +9,14 @@ several compressed and uncompressed texture formats and file types such as
 KTX and DDS, including support for multiple mipmaps and automatic mipmap
 generation.
 
-It supports both Linux and Windows. For Windows instructions, see below.
+It supports both Linux and Windows. For Windows instructions, see the end
+of the file.
+
+On Linux, run "make" to compile which generated the executables texgenpack
+(command line) and texview in the texview/ directory (GUI texture viewer
+and compressor using GTK+) and optionally "make install" to install
+to the default installation directory. Edit the Makefile to change the
+installation directory or compilation flags.
 
 The following texture formats are supported:
 
@@ -163,8 +170,8 @@ textures. It requires GTK+ 3 or GTK+ 2 to build.
 
 **** Windows instructions ****
 
-The supplied 32-bit texgenpack.exe (in the Release directory) was built with
-Visual C++ 2010 with static libary versions of libfgen and libpng 1.60. As
+The supplied 32-bit texgenpack.exe v0.6.1 (in the Release directory) was built
+with Visual C++ 2010 with static libary versions of libfgen and libpng 1.60. As
 such, the only requirements are the presence of the C run-time library
 msvcrt100.dll and pthreadVC2.dll from the pthread-win32 project. The latter
 file can be found on the pthread_win32 site project's pages at
