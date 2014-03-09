@@ -295,7 +295,9 @@ int main(int argc, char **argv) {
 		current_rmse[0] = compare_images(&current_image[0][0], &current_image[1][0]);
 
 	for (int i = 0; i < current_nu_image_sets; i++) {
-		if (!current_image[i][0].is_half_float || current_image[i][0].bits_per_component == 8)
+		if (!current_image[i][0].is_half_float &&
+		current_image[i][0].bits_per_component == 8 &&
+		current_image[i][0].nu_components > 2)
 			convert_image_set(i);
 	}
 	gui_zoom_fit_to_window();

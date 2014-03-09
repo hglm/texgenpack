@@ -775,7 +775,8 @@ again : ;
 			destroy_image_set(0);
 			load_image(filename, type, &current_image[0][0]);
 			current_nu_mipmaps[0] = 1;
-			convert_image_to_or_from_cairo_format(&current_image[0][0]);
+                        if (current_image[0][0].bits_per_component == 8 && current_image[0][0].nu_components > 2)
+				convert_image_to_or_from_cairo_format(&current_image[0][0]);
 			current_file_type[0] = type;
 			if (current_nu_image_sets == 0)
 				current_nu_image_sets = 1;
