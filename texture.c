@@ -232,9 +232,8 @@ TextureInfo *match_dds_id(const char *four_cc, int dx10_format, uint32_t pixel_f
 			if (dds_synonym[i].dx10_format == dx10_format)
 				return match_texture_type(dds_synonym[i].type);
 		}
-		else
-		if (texture_info[i].dx_four_cc[0] != '\0' &&
-		strncmp(texture_info[i].dx_four_cc, four_cc, 4) == 0)
+		else if (dds_synonym[i].dx10_four_cc[0] != '\0' &&
+		strncmp(dds_synonym[i].dx10_four_cc, four_cc, 4) == 0)
 			return match_texture_type(dds_synonym[i].type);
 	return NULL;
 }
