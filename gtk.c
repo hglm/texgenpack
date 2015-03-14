@@ -1551,6 +1551,9 @@ void gui_create_window_layout() {
     GUI_initialized = 1;
 }
 
+// Create a scaled base image of the whole texture and its mipmaps, using the internal
+// texture data stored by texgenpack.
+
 void gui_create_base_surface(int j) {
 	if (j >= current_nu_image_sets)
 		return;
@@ -1872,4 +1875,3 @@ void gui_handle_events() {
     while (gtk_events_pending())
         gtk_main_iteration();
 }
-

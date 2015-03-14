@@ -29,11 +29,12 @@
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__ || !defined(__BYTE_ORDER__)
 
 static unsigned int pack_rgba(int r, int g, int b, int a) {
-	return (unsigned int)r | ((unsigned int)g << 8) | ((unsigned int)b << 16) | ((unsigned int)a << 24);
+	return (unsigned int)r | ((unsigned int)g << 8) | ((unsigned int)b << 16) |
+		((unsigned int)a << 24);
 }
 
 static unsigned int pack_rgb_alpha_0xff(int r, int g, int b) {
-	return (unsigned int)r | ((unsigned int)g << 8) | ((unsigned int)b << 16) | 0xFF000000;
+	return pack_rgba(r, g, b, 0xFF);
 }
 
 static unsigned int pack_r(int r) {
@@ -146,7 +147,7 @@ static unsigned int pack_rgba(int r, int g, int b, int a) {
 }
 
 static unsigned int pack_rgb_alpha_0xff(int r, int g, int b) {
-	return 0x000000FF | (b << 8) | (g << 16) | ((unsigned int )r << 24);
+	return pack_rgba(r, g, b, 0xFF);
 }
 
 static unsigned int pack_r(int r) {
@@ -204,4 +205,3 @@ static int pixel_get_signed_g16(unsigned int pixel) {
 #define alpha_byte_offset 0
 
 #endif
-
