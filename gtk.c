@@ -641,24 +641,13 @@ static void menu_item_flip_vertical_right_activate_cb(GtkMenuItem *menu_item, gp
 static GtkWidget *file_save_dialog;
 static char *current_filename = NULL;
 
-static void menu_item_save_activate_cb(GtkMenuItem *menu_item, gpointer data) {
-	if (compression_active)
-		return;
-	if (current_nu_image_sets < 2) {
-		GtkWidget *dialog = gtk_message_dialog_new(GTK_WINDOW(gtk_window), (GtkDialogFlags)(GTK_DIALOG_MODAL |
-			GTK_DIALOG_DESTROY_WITH_PARENT), GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE,
-			"No image or texture defined as second image.");
-		gtk_dialog_run(GTK_DIALOG(dialog));
-		gtk_widget_destroy(dialog);
-		return;
-	}
-
+static void gui_save_texture(int image_index) {
 	const char *extension;
-	TextureInfo *info = match_texture_type(current_texture[1][0].type);
+	TextureInfo *info = match_texture_type(current_texture[image_index][0].type);
 	// Guess the preferred texture container format.
 	// Check whether saving/loading is supported for KTX or DDS.
  	// Usually DDS will be preferable for DXT1/3/5.
-	if (current_texture[1][0].type & TEXTURE_TYPE_DXTC_BIT)
+	if (current_texture[image_index][0].type & TEXTURE_TYPE_DXTC_BIT)
 		extension = "dds";
 	// Otherwise prioritize depending on the platform.
 #ifdef _WIN32
@@ -701,36 +690,37 @@ again : ;
 		int type = determine_filename_type(filename);
 		if (type & FILE_TYPE_TEXTURE_BIT) {
 			if (type == FILE_TYPE_KTX)
-				if (!match_texture_type(current_texture[1][0].type)->ktx_support) {
+				if (!match_texture_type(current_texture[image_index][0].type)->ktx_support) {
 					popup_message("Texture format not supported by KTX file.");
 					g_free(filename);
 					goto again;
 				}
 			if (type == FILE_TYPE_DDS)
-				if (!match_texture_type(current_texture[1][0].type)->dds_support) {
+				if (!match_texture_type(current_texture[image_index][0].type)->dds_support) {
 					popup_message("Texture format not supported by DDS file.");
 					g_free(filename);
 					goto again;
 				}
 			if (type == FILE_TYPE_PKM)
-				if (current_texture[1][0].type != TEXTURE_TYPE_ETC1) {
+				if (current_texture[image_index][0].type != TEXTURE_TYPE_ETC1) {
 					popup_message("Texture format not supported by PKM file.");
 					g_free(filename);
 					goto again;
 				}
 			if (type == FILE_TYPE_ASTC)
-				if (!(current_texture[1][0].type & TEXTURE_TYPE_ASTC_BIT)) {
+				if (!(current_texture[image_index][0].type & TEXTURE_TYPE_ASTC_BIT)) {
 					popup_message("Texture format not supported by ASTC file.");
 					g_free(filename);
 					goto again;
 				}
-			save_texture(&current_texture[1][0], current_nu_mipmaps[1], filename, type);
+			save_texture(&current_texture[image_index][0], current_nu_mipmaps[image_index],
+				filename, type);
 		}
 		else
 		if (type & FILE_TYPE_IMAGE_BIT) {
-			convert_image_to_or_from_cairo_format(&current_image[1][0]);
-			save_image(&current_image[1][0], filename, type);
-			convert_image_to_or_from_cairo_format(&current_image[1][0]);
+			convert_image_to_or_from_cairo_format(&current_image[image_index][0]);
+			save_image(&current_image[image_index][0], filename, type);
+			convert_image_to_or_from_cairo_format(&current_image[image_index][0]);
 		}
 		else {
 			popup_message("Can only save to filename with an extension corresponding to "
@@ -741,6 +731,92 @@ again : ;
 		g_free(filename);
 	}
 	gtk_widget_hide(file_save_dialog);
+}
+
+static void gui_save_image(int image_index) {
+	if (current_image[image_index][0].is_half_float ||
+	current_image[image_index][0].bits_per_component != 8) {
+		popup_message("Cannot save image to PNG file (need 8-bit components).");
+		return;
+	}
+	if (!(current_image[image_index][0].nu_components == 1 ||
+        current_image[image_index][0].nu_components == 3)) {
+		popup_message("Cannot save image to PNG file "
+			"(must have one or three components, or three with alpha).");
+		return;
+	}
+	const char *extension;
+	extension = "png";
+	char *filename;
+	if (current_filename == NULL)
+		filename = strdup("untitled.EXT");
+	else {
+		int n = strlen(current_filename);
+		int i;
+		for (i = n - 1; i > 0; i--)
+			if (current_filename[i] == '.')
+				break;
+		if (i == 0)
+			i = n;
+		filename = (char *)malloc(i + 4 + 1);
+		strncpy(filename, current_filename, i);
+		strcpy(&filename[i], ".EXT");
+	}
+	strcpy(&filename[strlen(filename) - 3], extension);
+	gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(file_save_dialog),
+		filename);
+	free(filename);
+again : ;
+	int r = gtk_dialog_run(GTK_DIALOG(file_save_dialog));
+	if (r == GTK_RESPONSE_ACCEPT) {
+		char *filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(file_save_dialog));
+		int type = determine_filename_type(filename);
+		if (type & FILE_TYPE_TEXTURE_BIT) {
+			popup_message("Can't save source image to texture file (convert to result first).");
+			g_free(filename);
+			goto again;
+		}
+		else if (type & FILE_TYPE_IMAGE_BIT) {
+			convert_image_to_or_from_cairo_format(&current_image[image_index][0]);
+			save_image(&current_image[image_index][0], filename, type);
+			convert_image_to_or_from_cairo_format(&current_image[image_index][0]);
+		}
+		else {
+			popup_message("Can only save to filename with an extension corresponding to "
+				" a PNG file.");
+			g_free(filename);
+			goto again;
+		}
+		g_free(filename);
+	}
+	gtk_widget_hide(file_save_dialog);
+}
+
+static void menu_item_save_source_activate_cb(GtkMenuItem *menu_item, gpointer data) {
+	if (current_nu_image_sets < 1) {
+		GtkWidget *dialog = gtk_message_dialog_new(GTK_WINDOW(gtk_window),
+			(GtkDialogFlags)(GTK_DIALOG_MODAL |
+			GTK_DIALOG_DESTROY_WITH_PARENT), GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE,
+			"No image defined.");
+		gtk_dialog_run(GTK_DIALOG(dialog));
+		gtk_widget_destroy(dialog);
+		return;
+	}
+	gui_save_image(0);
+}
+
+static void menu_item_save_result_activate_cb(GtkMenuItem *menu_item, gpointer data) {
+	if (compression_active)
+		return;
+	if (current_nu_image_sets < 2) {
+		GtkWidget *dialog = gtk_message_dialog_new(GTK_WINDOW(gtk_window), (GtkDialogFlags)(GTK_DIALOG_MODAL |
+			GTK_DIALOG_DESTROY_WITH_PARENT), GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE,
+			"No image or texture defined as second image.");
+		gtk_dialog_run(GTK_DIALOG(dialog));
+		gtk_widget_destroy(dialog);
+		return;
+	}
+	gui_save_texture(1);
 }
 
 static GtkWidget *file_load_dialog;
@@ -1266,10 +1342,16 @@ void gui_create_window_layout() {
     GtkWidget *menu_item_flip_vertical_right = gtk_menu_item_new_with_label("Flip result vertically (right image)");
     g_signal_connect(G_OBJECT(menu_item_flip_vertical_right), "activate",
 		G_CALLBACK(menu_item_flip_vertical_right_activate_cb), NULL);
-    GtkWidget *menu_item_load = gtk_menu_item_new_with_label("Load source (left image)");
-    g_signal_connect(G_OBJECT(menu_item_load), "activate", G_CALLBACK(menu_item_load_activate_cb), NULL);
-    GtkWidget *menu_item_save = gtk_menu_item_new_with_label("Save result (right image)");
-    g_signal_connect(G_OBJECT(menu_item_save), "activate", G_CALLBACK(menu_item_save_activate_cb), NULL);
+
+	GtkWidget *menu_item_load = gtk_menu_item_new_with_label("Load source (left image)");
+	g_signal_connect(G_OBJECT(menu_item_load), "activate", G_CALLBACK(menu_item_load_activate_cb), NULL);
+	GtkWidget *menu_item_save_source = gtk_menu_item_new_with_label("Save source (left image)");
+	g_signal_connect(G_OBJECT(menu_item_save_source), "activate",
+	        G_CALLBACK(menu_item_save_source_activate_cb), NULL);
+	GtkWidget *menu_item_save_result = gtk_menu_item_new_with_label("Save result (right image)");
+	g_signal_connect(G_OBJECT(menu_item_save_result), "activate",
+		G_CALLBACK(menu_item_save_result_activate_cb), NULL);
+
     GtkWidget *menu_item_clear = gtk_menu_item_new_with_label("Clear result (right image)");
     g_signal_connect(G_OBJECT(menu_item_clear), "activate", G_CALLBACK(menu_item_clear_activate_cb), NULL);
     GtkWidget *menu_item_quit = gtk_menu_item_new_with_label("Quit");
@@ -1282,7 +1364,8 @@ void gui_create_window_layout() {
     gtk_menu_shell_append(GTK_MENU_SHELL(action_menu), menu_item_stop_compression);
     gtk_menu_shell_append(GTK_MENU_SHELL(action_menu), menu_item_flip_vertical_right);
     gtk_menu_shell_append(GTK_MENU_SHELL(action_menu), menu_item_load);
-    gtk_menu_shell_append(GTK_MENU_SHELL(action_menu), menu_item_save);
+    gtk_menu_shell_append(GTK_MENU_SHELL(action_menu), menu_item_save_source);
+    gtk_menu_shell_append(GTK_MENU_SHELL(action_menu), menu_item_save_result);
     gtk_menu_shell_append(GTK_MENU_SHELL(action_menu), menu_item_clear);
     gtk_menu_shell_append(GTK_MENU_SHELL(action_menu), menu_item_quit);
     // Create the menu bar.
