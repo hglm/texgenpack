@@ -1,7 +1,9 @@
 
-texgenpack v0.7 -- a texture compressor using a genetic algorithm.
+texgenpack v0.8 -- texture compression using a genetic algorithm.
 
-This program is texture compressor and conversion utility that uses
+**** Introduction ****
+
+This program is texture compression and conversion utility that uses
 the GA implementation in libfgen to compress textures. It doesn't use the
 fastest possible method, but is robust and inherently multi-threaded to use
 all available cores in the CPU. The program can also convert to and from
@@ -9,14 +11,41 @@ several compressed and uncompressed texture formats and file types such as
 KTX and DDS, including support for multiple mipmaps and automatic mipmap
 generation.
 
-It supports both Linux and Windows. For Windows instructions, see the end
-of the file.
+Although deleveloped on and mainly targeting Linux, there is also some support
+for Windows (for instructions, see the end of the file).
+
+
+**** Linux installation instructions ****
 
 On Linux, run "make" to compile which generated the executables texgenpack
-(command line) and texview in the texview/ directory (GUI texture viewer
-and compressor using GTK+) and optionally "make install" to install
-to the default installation directory. Edit the Makefile to change the
-installation directory or compilation flags.
+(command line) and texgenpack-gui (GUI texture viewer and compressor using GTK+)
+and optionally "sudo make install" to install to the default installation
+directory. Edit the Makefile to change the installation directory or compilation
+flags.
+
+Prerequisites for compilation:
+
+	libpng (development version)
+	GTK+ 3 development libraries (for GUI program)
+	libfgen (https://github.com/hglm/libfgen.git)
+
+For example, the complete compilation and installation process on a Debian-
+ased system might look like this:
+
+	sudo apt-get install libpng12-dev
+	sudo apt-get install libgtk-3-dev
+	git clone https://github.com/hglm/libfgen.git
+	cd libfgen
+	make
+	sudo make install
+	cd ..
+	# Clone texgenpack if not already done.
+	git clone https://github.com/hglm/texgenpack.git
+        cd texgenpack
+	make
+	sudo make install
+
+**** Features and description ****
 
 The following texture formats are supported:
 
@@ -52,11 +81,6 @@ images, and handles mipmaps.
 Because of the general nature of the method used, it is relatively easy to add
 new compression formats to the code; only a decompression function is required
 to enable compression of that format.
-
-Requirements:
-
-	libpng
-	libfgen (available on SourceForge, version >= 0.1.14 recommended)
 
 Run texgenpack without arguments for instructions.
 
@@ -163,10 +187,9 @@ Some comments:
   program could help to evaluate or research texture compression schemes in
   general.
 
-Also included is the viewer program texview which can view, compare and also
-compress all formats that texgenpack handles. It has zooming support,
-support for showing differences between textures/images, and support for HDR
-textures. It requires GTK+ 3 or GTK+ 2 to build.
+Also included is the viewer and conversion program texgenpack-gui which can view, compare and also compress all formats that texgenpack handles. It has zooming
+support, support for showing differences between textures/images, and support for
+HDR textures. It requires GTK+ 3 or GTK+ 2 to build.
 
 **** Windows instructions ****
 

@@ -16,22 +16,22 @@ SHARED_MODULE_OBJECTS = image.o compress.o mipmap.o file.o texture.o etc2.o dxtc
 TEXGENPACK_MODULE_OBJECTS = texgenpack.o calibrate.o
 TEXVIEW_MODULE_OBJECTS = viewer.o gtk.o
 
-all : texgenpack texview/texview
+all : texgenpack texgenpack-gui
 
 texgenpack : $(TEXGENPACK_MODULE_OBJECTS) $(SHARED_MODULE_OBJECTS)
 	$(CC) $(LFLAGS) $(TEXGENPACK_MODULE_OBJECTS) $(SHARED_MODULE_OBJECTS) -o texgenpack -lm -lpng -lfgen -lpthread $(PNG_LIB_LOCATION)
 
-texview/texview : $(TEXVIEW_MODULE_OBJECTS) $(SHARED_MODULE_OBJECTS)
-	$(CC) $(LFLAGS) $(TEXVIEW_MODULE_OBJECTS) $(SHARED_MODULE_OBJECTS) -o texview/texview -lm -lpng -lfgen -lpthread $(PKG_CONFIG_LFLAGS)
+texgenpack-gui : $(TEXVIEW_MODULE_OBJECTS) $(SHARED_MODULE_OBJECTS)
+	$(CC) $(LFLAGS) $(TEXVIEW_MODULE_OBJECTS) $(SHARED_MODULE_OBJECTS) -o texgenpack-gui -lm -lpng -lfgen -lpthread $(PKG_CONFIG_LFLAGS)
 
-install : texgenpack texview/texview
+install : texgenpack texgenpack-gui
 	install -m 0755 texgenpack $(INSTALL_DIR)/texgenpack
-	install -m 0755 texview/texview $(INSTALL_DIR)/texview
+	install -m 0755 texgenpack-gui $(INSTALL_DIR)/texgenpack-gui
 
 clean :
 	rm -f $(TEXGENPACK_MODULE_OBJECTS) $(TEXVIEW_MODULE_OBJECTS) $(SHARED_MODULE_OBJECTS)
 	rm -f texgenpack
-	rm -f texview/texview
+	rm -f texgenpack-gui
 
 gtk.o : gtk.c
 	$(CC) -c $(CFLAGS) $(PKG_CONFIG_CFLAGS) gtk.c -o gtk.o

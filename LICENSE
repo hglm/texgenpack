@@ -16,21 +16,3 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 */
 
-
-static void strtoupper(char *str) {
-	int n = strlen(str);
-	for (int i = 0; i < n; i++)
-		str[i] = toupper(str[i]);
-}
-
-static int strcasecmp(const char *str1, const char *str2) {
-	char *str1_upper = (char *)alloca(strlen(str1) + 1);
-	strcpy(str1_upper, str1);
-	strtoupper(str1_upper);
-	char *str2_upper = (char *)alloca(strlen(str2) + 1);
-	strcpy(str2_upper, str2);
-	strtoupper(str2_upper);
-	int r = strcmp(str1_upper, str2_upper);
-	return r;
-}
-
