@@ -1330,7 +1330,7 @@ void gui_create_window_layout() {
     GtkWidget *menu_item_reset_zoom_real_size = gtk_menu_item_new_with_label("Reset zoom (real size)");
     g_signal_connect(G_OBJECT(menu_item_reset_zoom_real_size), "activate",
 	G_CALLBACK(menu_item_reset_zoom_real_size_activate_cb), NULL);
-    GtkWidget *menu_item_compress = gtk_menu_item_new_with_label("Compress");
+    GtkWidget *menu_item_compress = gtk_menu_item_new_with_label("Compress/convert");
     g_signal_connect(G_OBJECT(menu_item_compress), "activate",
 	G_CALLBACK(menu_item_compress_activate_cb), NULL);
     GtkWidget *menu_item_stop_compression = gtk_menu_item_new_with_label("Stop compression (non-resumable)");
@@ -1458,7 +1458,7 @@ void gui_create_window_layout() {
     GtkWidget *menu_item_hdr_display_settings = gtk_menu_item_new_with_label("HDR display settings");
     g_signal_connect(G_OBJECT(menu_item_hdr_display_settings), "activate",
 	G_CALLBACK(menu_item_hdr_display_settings_activate_cb), NULL);
-    GtkWidget *menu_item_compression_settings = gtk_menu_item_new_with_label("Compression settings");
+    GtkWidget *menu_item_compression_settings = gtk_menu_item_new_with_label("Compression/conversion settings");
     g_signal_connect(G_OBJECT(menu_item_compression_settings), "activate",
 	G_CALLBACK(menu_item_compression_settings_activate_cb), NULL);
     GtkWidget *settings_menu = gtk_menu_new();
