@@ -1,19 +1,20 @@
 
-texgenpack v0.8 -- texture compression using a genetic algorithm.
+texgenpack v0.8.1 -- texture compression using a genetic algorithm.
 
 **** Introduction ****
 
-This program is texture compression and conversion utility that uses
-the GA implementation in libfgen to compress textures. It doesn't use the
-fastest possible method, but is robust and inherently multi-threaded to use
-all available cores in the CPU. The program can also convert to and from
-several compressed and uncompressed texture formats and file types such as
-KTX and DDS, including support for multiple mipmaps and automatic mipmap
-generation.
+This program is texture compression and conversion utility that uses a genetic
+algorithm to compress textures. It uses the GA implementation in libfgen to
+compress textures. Using a general genetic algorithm is a slow method, but is
+robust and inherently multi-threaded so it can use all available cores in the
+CPU. It also has the advantage that numerous formats can be supported, since
+only a decompression function has to be provided to support a new format. The
+program can also convert to and from several compressed and uncompressed
+texture formats and file types such as KTX and DDS, including support for
+multiple mipmaps and automatic mipmap generation.
 
-Although deleveloped on and mainly targeting Linux, there is also some support
-for Windows (for instructions, see the end of the file).
-
+Although deleveloped on and mainly targeting Linux, there is also some (dated)
+support for Windows (for instructions, see the end of the file).
 
 **** Linux installation instructions ****
 
@@ -55,24 +56,25 @@ The following texture formats are supported:
   punchthrough alpha are supported.
 - Preliminary support for one or two component textures (stored as one or
   two 16-bit values in an image file): R11_EAC and RG11_EAC and their signed
-  variants.
-- DXT1, DXT3, DXT5 and DXT1A (also known as BC1/2/3).
-- ASTC via ARM's encoder.
-- BPTC (BC7).
+  variants. These are part of the ETC2 family.
+- DXT1, DXT3, DXT5 and DXT1A (also known as BC1/2/3 or S3TC).
+- RGTC1/RGTC2 (BC4/BC5) for one and two component textures.
+- BPTC (BC7), a high-quality RGBA compression format.
 - BPTC_FLOAT and BPTC_SIGNED_FLOAT (BC6H_UF16 and BC6H_SF16) for both linear
   and HDR textures.
+- ASTC via ARM's encoder.
 
 The following file formats are supported:
 
 - KTX, an OpenGL standard, multiple mipmap levels supported with multitude
   of texture formats.
 - PKM, for ETC textures containing a single mipmap level.
-- DDS, for DXTC, BPTC or uncompressed textures, multiple mipmap levels
-  supported.
+- DDS, for DXTC, RGTC, BPTC (BC1-7) or uncompressed textures, multiple mipmap
+  levels supported.
 
 PNG is the only supported image format. You'll have to convert images to PNG
-before using the compress function (you can also use KTX or DDS files as
-source).
+before using the compress function (you can also use KTX or DDS files, either
+compressed or uncompressed as source).
 
 The program supports compression, decompression and comparison of image files
 and textures, reporting RMSE and PSNR statistics of the difference between
@@ -82,16 +84,22 @@ Because of the general nature of the method used, it is relatively easy to add
 new compression formats to the code; only a decompression function is required
 to enable compression of that format.
 
-Run texgenpack without arguments for instructions.
+Run the commmand line utility texgenpack without arguments for instructions.
 
 Basically, one command should be specified as the first argument, either
 --compress, --decompress or --compare. The last two arguments on the command
 line should be the source and destination files in that order. Various options
-are available, including the speed settings --ultra, --fast (default),
---medium and --slow. Use --format to select the format for compression (the
-default when the destination is a KTX or PKM file is ETC1, for DDS it is
-DXT1). The --progress option will display a progress percentage as the
-algorithm runs.
+are available.
+
+The, speed/quality level is set using --level <number>, with <number> in the
+range 0 to 50. The options --ultra, --fast (default), --medium and --slow
+correspond to quality level presets of 0, 8, 16 and 32, respectively.
+
+**** Formats ****
+
+Use --format to select the format for compression (the default when the
+destination is a KTX or PKM file is ETC1, for DDS it is DXT1). The --progress
+option will display a progress percentage as the algorithm runs.
 
 Examples:
 
@@ -147,30 +155,57 @@ an 8-bit image converted to half-float format), this should result in improved
 quality. The same applies to the use of 16-bit source formats for one or two
 component compression with RGTC.
 
-Speed settings:
+**** Quality level settings ****
 
-	--ultra: The fastest setting. Eight GAs are run concurrently for
-	  different blocks. Population size is 256, number of generations is
-          100. Supports the --generations and --islands options.
-	--fast: The default setting. Four GAs are run concurrently for the
-	  same block for 200 generations. Population size is 64. The best
-	  solution out of the four is chosen. Can be customized with the
-	  --generations and --islands options.
-	--medium: Eight Gas are run concurrently for the same block for 200
-          generations. Population size is 128. Supports the --generations and
-	  --islands options.
-	--slow: Sixteen GAs are run concurrently for the same block for 500
-	  generations. Population size is 128. Supports the --generations and
-	  --islands options.
+The first class of quality levels (0 to 7) only performs a single try at
+compressing a particular 4x4 pixel block. Eight blocks are compressed in
+parallel. Due the nature of the genetic algorithm, the compression quality
+can vary so this class has relatively high chance of blocks with a low
+compression quality being present. For levels 0 to 7, the number of
+generations of the genetic agorithm increases from 100 to 275. The --ultra
+quality preset corresponds to level 0.
 
-The graphical viewer and compression program texview uses GTK+ 2 or 3. It
+The second class of quality levels (8 to 32) performs multiple tries at
+compressing a particular 4x4 pixel block. The best result is used. The
+number of tries is equal to the quality level settings, so for levels 8
+to 32, the number of tries per block ranges from 8 to 32. A higher number
+of tries increases the quality of the resulting compressed texture. The
+--fast preset corresponds to level 8, --medium to level 16, and --slow
+to level 32.
+
+The third class of quality levels (33 to 50) uses 32 tries, like level 32
+(equal to --slow setting), but increases the number of generations of the
+genetic algorithm proportional to the quality level. For levels 33 to 50,
+the initial number of generations increases from 60 to 230 with a step size
+of 10.
+
+For compression levels in the range 8 to 50, an adaptive scheme has been
+implemented whereby the number of generations of the genetic algorithm is
+doubled or tripled when the compressed block is not of sufficient quality.
+
+For all compression levels, a short second-pass is performed that uses
+a genetic algorithm with a small population size to fine-tune the end result.
+
+**** Graphical interface (texgenpack-gui) ****
+
+The graphical viewer and compression program texgenpack-gui uses GTK+ 3. It
 accepts zero, one or two image or texture filenames as arguments.
 
-Some comments:
+The GUI program can be use to compress or convert images and textures. Amongst
+other features, it has options to adjust the number of components, convert
+components to to 8 and 16-bit unsigned or signed formats or to half-float
+format, generate mipmaps. Apart from texture compression, the program (just
+like the command line utility) can be used to convert uncompressed textures
+from one format to another.
+
+Advantages of the GUI program include immediate quality indication and
+information about the duration of the compression process.
+
+**** Miscelleanous remarks about texgenpack ****
 
 - The compression is fairly slow at the default setting (--fast). The --ultra
-  setting is faster but sacrifices quality. The higher quality settings
-  --medium and --slow produce good quality but are slow.
+  preset is faster but sacrifices quality. The higher quality settings
+  --medium and --slow produce better quality but are slow.
 - The code has not been tested on big-endian systems although they are
   supported. Loading of KTX files created on a big-endian system should work
   correctly.
@@ -193,6 +228,9 @@ It has zooming support, support for showing differences between textures/
 images, and support for HDR textures. It requires GTK+ 3 or GTK+ 2 to build.
 
 **** Windows instructions ****
+
+The Windows port is out of date. The included binary does not support the
+--level option.
 
 The supplied 32-bit texgenpack.exe v0.6.1 (in the Release directory) was built
 with Visual C++ 2010 with static libary versions of libfgen and libpng 1.60. As

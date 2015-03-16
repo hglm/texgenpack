@@ -106,13 +106,13 @@ static void calibrate_generation_callback(Ffit *fit, int generation, const doubl
 void calibrate_genetic_parameters(Image *image, int texture_type) {
 	option_deterministic = deterministic;	// Whether to initialize random function seed with timer.
 	option_quiet = 1;
+	mutation_bin_initialize();
+#if 0
 	Ffit *fit = ffit_create(2, calibrate_generation_callback, calibrate_calculate_error);
 	ffit_set_parameter_range_and_mapping(fit, 0, 0, 0.1, FFIT_MAPPING_LINEAR);	// Mutation rate.
 	ffit_set_parameter_range_and_mapping(fit, 1, 0, 0.9, FFIT_MAPPING_LINEAR);	// Crossover rate.
 	fit_user_data.image = image;
 	fit_user_data.texture_format = texture_type;
-	mutation_bin_initialize();
-#if 0
 	if (real_valued_ga)
 		ffit_run_fgen_real_valued(fit, 16, FGEN_ELITIST_SUS, 0.6, 0.4, 0.1);
 	else

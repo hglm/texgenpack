@@ -49,7 +49,7 @@ int source_filetype;
 int dest_filetype;
 int option_orientation = 0;
 int option_texture_format = - 1;
-int option_speed = SPEED_FAST;
+int option_compression_level = SPEED_FAST;
 int option_progress = 0;
 int option_modal_etc2 = 0;
 int option_allowed_modes_etc2 = - 1;
@@ -78,58 +78,75 @@ static char *instructions1 =
 static const char *commands[NU_COMMANDS] = {
 	"--compress", "--decompress", "--compare", "--calibrate" };
 
-#define NU_OPTIONS 19
+#define NU_OPTIONS 20
 
-#define OPTION_VERBOSE		0
-#define OPTION_VERY_VERBOSE	1
-#define OPTION_FAST		2
-#define OPTION_MEDIUM		3
-#define OPTION_SLOW		4
-#define OPTION_MAXTHREADS	5
-#define OPTION_ORIENTATION	6
-#define OPTION_TEXTURE_FORMAT	7
-#define OPTION_PROGRESS		8
-#define OPTION_MODAL_ETC2	9
-#define OPTION_ULTRA		10
-#define OPTION_ALLOWED_MODES	11
-#define OPTION_MIPMAPS		12
-#define OPTION_GENERATIONS	13
-#define OPTION_ISLANDS		14
-#define OPTION_FLIP_VERTICAL	15
-#define OPTION_QUIET		16
-#define OPTION_HALF_FLOAT	17
-#define OPTION_HDR		18
+enum {
+	OPTION_COMPRESSION_LEVEL = 0,
+	OPTION_ULTRA,
+	OPTION_FAST,
+	OPTION_MEDIUM,
+	OPTION_SLOW,
+	OPTION_TEXTURE_FORMAT,
+	OPTION_HALF_FLOAT,
+	OPTION_HDR,
+	OPTION_MIPMAPS,
+	OPTION_ORIENTATION,
+	OPTION_FLIP_VERTICAL,
+	OPTION_MODAL_ETC2,
+	OPTION_ALLOWED_MODES,
+	OPTION_MAXTHREADS,
+	OPTION_GENERATIONS,
+	OPTION_ISLANDS,
+	OPTION_PROGRESS,
+	OPTION_VERBOSE,
+	OPTION_VERY_VERBOSE,
+	OPTION_QUIET,
+};
 
 static const char *options[NU_OPTIONS] = {
-	"--verbose", "--very-verbose", "--fast", "--medium", "--slow", "--maxthreads", "--orientation", "--format",
-	"--progress", "--modal", "--ultra", "--allowed-modes", "--mipmaps", "--generations", "--islands",
-	"--flip-vertical", "--quiet", "--half-float", "--hdr" };
+	"--level", "--ultra", "--fast", "--medium", "--slow",
+	"--format",
+	"--half-float", "--hdr",
+	"--mipmaps",
+	"--orientation", "--flip-vertical",
+	"--modal", "--allowed-modes",
+	"--maxthreads", "--generations", "--islands",
+	"--progress", "--verbose", "--very-verbose", "--quiet",
+};
 
 static const char *option_argument[NU_OPTIONS] = {
-	"", "", "", "", "", "<number>", "<direction>", "<format>", "", "", "", "<modes>", "", "<number>", "<number>",
-	"", "", "", "" };
+	"<number>", "", "", "", "",
+	"<format>",
+	"", "",
+	"",
+	"<direction>", "",
+	"", "<modes>",
+	"<number>", "<number>", "<number>",
+	"", "", "", "",
+};
 
 static const char *option_description[NU_OPTIONS] = {
-	"Be verbose (information for each block).",
-	"Be very verbose (more information for each block).",
-	"Fast compression method (default).",
-	"Medium compression method.",
-	"Slow compression method.",
-	"Specify the maximum number of threads to use (not recommended; uses --islands option to control threading level).",
-	"Write orientation key when writing .ktx file. Direction must be up or down.",
-	"Texture format. One of the following: ",
-	"Display a percentage progress indicator.",
-	"Use a different technique for ETC2 compression with islands tied to specific ETC2 modes.",
+	"Compression level (0 to 50, 0 = fastest, 50 = slowest/best compression).",
 	"Ultra fast compression optimizing different blocks concurrently.",
-	"Specify the ETC2 modes to use. Argument is a string containing a subset of the letters IDTHP.",
+	"Fast compression method (level = 8) (default).",
+	"Medium compression method (level = 16).",
+	"Slow compression method (level = 32).",
+	"Texture format. One of the following: ",
+	"Convert regular images to half-float format before compression.",
+	"The half-float format contains a HDR texture that is not normalized. This affects compression.",
 	"Generate mipmaps when compressing an image into a texture. When decompressing to an image file, generate a "
 	"sequence of image files named filename-mipmap*.png holding the mipmap levels.",
-	"Set the number of generations for the genetic algorithm per block.",
-	"Set the number of concurrent islands for the genetic algorithm.",
+	"Write orientation key when writing .ktx file. Direction must be up or down.",
 	"Flip the texture vertically during the conversion process.",
+	"Use a different technique for ETC2 compression with islands tied to specific ETC2 modes.",
+	"Specify the ETC2 modes to use. Argument is a string containing a subset of the letters IDTHP.",
+	"Specify the maximum number of threads to use (not recommended; uses --islands option to control threading level).",
+	"Set the number of generations for the genetic algorithm per block (adjusted from compression level).",
+	"Set the number of concurrent islands for the genetic algorithm (adjusted from compression level).",
+	"Display a percentage progress indicator.",
+	"Be verbose (information for each block).",
+	"Be very verbose (more information for each block).",
 	"Don't print anything.",
-	"Convert regular images to half-float format before compression.",
-	"The half-float format contains a HDR texture that is not normalized. This affects compression."
 };
 
 int main(int argc, char **argv) {
@@ -140,7 +157,7 @@ int main(int argc, char **argv) {
 		printf("\nOptions:\n");
 		for (int i = 0; i < NU_OPTIONS; i++) {
 			printf("%s %s\n        %s\n", options[i], option_argument[i], option_description[i]);
-			if (i == 7) {
+			if (i == OPTION_TEXTURE_FORMAT) {
 				int n = get_number_of_texture_formats();
 				for (int j = 0; j < n - 1; j++) {
 					printf("%s, ", get_texture_format_index_text(j, 0));
@@ -187,15 +204,15 @@ int main(int argc, char **argv) {
 			i++;
 			continue;
 		case OPTION_FAST :
-			option_speed = SPEED_FAST;
+			option_compression_level = SPEED_FAST;
 			i++;
 			continue;
 		case OPTION_MEDIUM :
-			option_speed = SPEED_MEDIUM;
+			option_compression_level = SPEED_MEDIUM;
 			i++;
 			continue;
 		case OPTION_SLOW :
-			option_speed = SPEED_SLOW;
+			option_compression_level = SPEED_SLOW;
 			i++;
 			continue;
 		case OPTION_PROGRESS :
@@ -207,7 +224,7 @@ int main(int argc, char **argv) {
 			i++;
 			continue;
 		case OPTION_ULTRA :
-			option_speed = SPEED_ULTRA;
+			option_compression_level = SPEED_ULTRA;
 			i++;
 			continue;
 		case OPTION_MIPMAPS :
@@ -309,10 +326,19 @@ int main(int argc, char **argv) {
 		case OPTION_ISLANDS :
 			value = atoi(argv[i + 1]);
 			if (value < 1 || value > 64) {
-				printf("Error -- invalid number of islands specified (range 2-64).\n");
+				printf("Error -- invalid number of islands specified (range 1-64).\n");
 				exit(1);
 			}
 			option_islands = value;
+			i += 2;
+			break;
+		case OPTION_COMPRESSION_LEVEL :
+			value = atoi(argv[i + 1]);
+			if (value < 0 || value > 50) {
+				printf("Error -- invalid compression level (range 0-50).\n");
+				exit(1);
+			}
+			option_compression_level = value;
 			i += 2;
 			break;
 #if 0

@@ -175,16 +175,37 @@ typedef void (*CompressCallbackFunction)(BlockUserData *user_data);
 #define ORIENTATION_DOWN	1
 #define ORIENTATION_UP		2
 
-#define SPEED_ULTRA	0
-#define SPEED_FAST	1
-#define SPEED_MEDIUM	2
-#define SPEED_SLOW	3
+// Compression levels (0 to 50).
+
+enum {
+	// Compression level class 0 (levels 0 to 7).
+	// Compress different blocks concurrently, populations_size = 256,
+	// nu_generations = 100 + level * 25.
+	COMPRESSION_LEVEL_CLASS_0 = 0,
+	// Compression level class 1 (levels 8 to 32)
+	// Compress the same block concurrently, number of tries is equal to
+	// level value (8 to 32), nu_generations = 100.
+	COMPRESSION_LEVEL_CLASS_1 = 8,
+	// Compression level class 2 (levels 33 to 50)
+	// Compress the same block concurrently, number of tries is 32,
+	// nu_generations = 100 + 25 * (level - 32)
+	COMPRESSION_LEVEL_CLASS_2 = 33,
+};
+
+// Ultra preset: Compress different blocks concurrenty, nu_generations = 100.
+#define SPEED_ULTRA	(COMPRESSION_LEVEL_CLASS_0)
+// Fast preset: Eight tries per block, nu_generations = 100.
+#define SPEED_FAST	(COMPRESSION_LEVEL_CLASS_1)
+// Medium preset: 16 tries per block, nu_generations = 100.
+#define SPEED_MEDIUM	(COMPRESSION_LEVEL_CLASS_1 + 8)
+// Slow preset 32 tries per block, nu_generations = 100.
+#define SPEED_SLOW	(COMPRESSION_LEVEL_CLASS_1 + 24)
 
 extern int command;
 extern int option_verbose;
 extern int option_max_threads;
 extern int option_orientation;
-extern int option_speed;
+extern int option_compression_level;
 extern int option_progress;
 extern int option_modal_etc2;
 extern int option_allowed_modes_etc2;

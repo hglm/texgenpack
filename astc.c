@@ -123,20 +123,14 @@ void compress_image_to_astc_texture(Image *image, int texture_type, Texture *tex
 	// Execute encoding command.
 	char *s = (char *)malloc(strlen(png_filename) + strlen(astc_filename) + 40);
 	char *astcenc_speed_option;
-	switch (option_speed) {
-	case SPEED_ULTRA :
+	if (option_compression_level < SPEED_FAST)
 		astcenc_speed_option = "-fast";
-		break;
-	case SPEED_FAST :
+	else if (option_compression_level < SPEED_MEDIUM)
 		astcenc_speed_option = "-medium";
-		break;
-	case SPEED_MEDIUM :
+	else if (option_compression_level < SPEED_SLOW)
 		astcenc_speed_option = "-thorough";
-		break;
-	case SPEED_SLOW :
+	else
 		astcenc_speed_option = "-exhaustive";
-		break;
-	}
 	TextureInfo *info = match_texture_type(texture_type);
 	sprintf(s, "astcenc -c %s %s %dx%d %s -silentmode", png_filename, astc_filename, info->block_width,
 		info->block_height, astcenc_speed_option);

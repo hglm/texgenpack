@@ -30,6 +30,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 static void compress_with_single_population(Image *image, Texture *Texture);
 static void compress_with_archipelago(Image *image, Texture *texture);
 static void compress_multiple_blocks_concurrently(Image *image, Texture *texture);
+static void compress_multiple_blocks_concurrently_second_pass(Image *image, Texture *texture);
 static void set_alpha_pixels(Image *image, int x, int y, int w, int h, unsigned char *alpha_pixels);
 static void optimize_alpha(Image *image, Texture *texture);
 static double get_rmse_threshold(Texture *texture, int speed, Image *image);
@@ -79,7 +80,7 @@ int genetic_parameters, float mutation_prob, float crossover_prob) {
 		calculate_gamma_corrected_half_float_table();
 	if (image->is_half_float)
 		calculate_normalized_float_table();
-	rmse_threshold = get_rmse_threshold(texture, option_speed, image);
+	rmse_threshold = get_rmse_threshold(texture, option_compression_level, image);
 
 	if (option_verbose) {
 		memset(mode_statistics, 0, sizeof(int) * 16);
@@ -91,6 +92,7 @@ int genetic_parameters, float mutation_prob, float crossover_prob) {
 	}
 	else {
 		// Emperically determined mutation probability.
+#if 0
 		if (texture_type & TEXTURE_TYPE_128BIT_BIT)
 			if (texture_type == TEXTURE_TYPE_BPTC_FLOAT)
 				// bptc_float format needs higher mutation probability.
@@ -201,39 +203,86 @@ int genetic_parameters, float mutation_prob, float crossover_prob) {
 					mutation_probability = 0.025;
 				else
 					mutation_probability = 0.026;
+#else
+		if (texture_type & TEXTURE_TYPE_128BIT_BIT)
+			if (texture_type == TEXTURE_TYPE_BPTC_FLOAT)
+				// bptc_float format needs higher mutation probability.
+				mutation_probability = 0.014;
+			else if (texture_type == TEXTURE_TYPE_BPTC)
+				// bptc
+				mutation_probability = 0.011;
+			else if (texture_type == TEXTURE_TYPE_DXT5)
+				mutation_probability = 0.017;
+			else
+				mutation_probability = 0.013;
+		else	// 64-bit texture formats.
+			if (texture_type == TEXTURE_TYPE_ETC1)
+				mutation_probability = 0.023;
+			else if (texture_type == TEXTURE_TYPE_ETC2_RGB8)
+				mutation_probability = 0.022;
+			else if (texture_type == TEXTURE_TYPE_DXT1)
+				mutation_probability = 0.025;
+			else if (texture_type == TEXTURE_TYPE_R11_EAC)
+				mutation_probability = 0.028;
+			else	// Other 64-bit texture formats.
+				mutation_probability = 0.024;
+#endif
 		crossover_probability = 0.7;
 	}
-	if (option_speed == SPEED_FAST) {
-		population_size = 64;
-		nu_generations = 200;
-		nu_islands = 4;
-		compress_with_archipelago(image, texture);
-	}
-	else
-	if (option_speed == SPEED_MEDIUM) {
-		population_size = 128;
-		nu_generations = 200;
-		nu_islands = 8;
-		compress_with_archipelago(image, texture);
-	}
-	else
-	if (option_speed == SPEED_SLOW) {
-		population_size = 128;
-		nu_generations = 500;
-		nu_islands = 16;
-		compress_with_archipelago(image, texture);
-	}
-	else
-	if (option_speed == SPEED_ULTRA) {
+	int nu_generations_second_pass;
+	if (option_compression_level < COMPRESSION_LEVEL_CLASS_1) {
+		// Compression level class 0.
 		population_size = 256;
-		nu_generations = 100;
+		nu_generations = 100 + option_compression_level * 25;
 		nu_islands = 8;
+		nu_generations_second_pass = 4000;
 		if (option_max_threads != - 1 && option_max_threads < 8) {
 			printf("Option --ultra not compatible with max threads setting (need >= 8).\n");
 			exit(1);
 		}
 		compress_multiple_blocks_concurrently(image, texture);
 	}
+	else if (option_compression_level < COMPRESSION_LEVEL_CLASS_2) {
+		// Compression level class 1.
+		population_size = 128;
+		nu_generations = 50;
+		nu_islands = option_compression_level;		
+		nu_generations_second_pass = 8000;
+		compress_with_archipelago(image, texture);
+	}
+	else {
+		// Compression level class 2.
+		population_size = 128;
+		nu_generations = 50 + (option_compression_level - 32) * 10;
+		nu_islands = 32;
+		nu_generations_second_pass = 16000;
+		compress_with_archipelago(image, texture);
+	}
+
+	if (option_generations != - 1)
+		nu_generations = option_generations;
+	if (option_islands != - 1)
+		nu_islands = option_islands;
+
+	if (option_max_threads != -1) {
+		while (nu_islands > option_max_threads) {
+			nu_islands /= 2;
+			nu_generations *= 2;
+		}
+	}
+
+	// Decompress the compressed texture and calculate the difference with the original and report it.
+	Image compressed_image;
+	convert_texture_to_image(texture, &compressed_image);
+	compare_images(image, &compressed_image);
+	destroy_image(&compressed_image);
+
+#if 1
+	// Perform second pass.
+	nu_generations = nu_generations_second_pass;
+	nu_islands = 8;
+	compress_multiple_blocks_concurrently_second_pass(image, texture);
+#endif
 
 	// Optionally post-process the texture to optimize the alpha values.
 //	optimize_alpha(image, texture);
@@ -280,8 +329,38 @@ static void generation_callback(FgenPopulation *pop, int generation) {
 	// generations.
 	FgenIndividual *best = fgen_best_individual_of_population(pop);
 	double rmse = sqrt((1.0 / best->fitness) / 16);
-	if (rmse < rmse_threshold)
+	if (generation <= nu_generations && rmse < rmse_threshold)
 		fgen_signal_stop(pop);
+}
+
+static void generation_callback_non_adaptive(FgenPopulation *pop, int generation) {
+	if (generation == 0)
+		return;
+	if (generation >= nu_generations) {
+		fgen_signal_stop(pop);
+		return;
+	}
+}
+
+static void generation_callback_archipelago(FgenPopulation *pop, int generation) {
+	if (generation == 0)
+		return;
+	if (generation >= nu_generations * 3) {
+		fgen_signal_stop(pop);
+		return;
+	}
+	// Adaptive, if the fitness is above the threshold, stop, otherwise go on for another nu_generations
+	// generations.
+	FgenIndividual *best = fgen_best_individual_of_population(pop);
+	double rmse = sqrt((1.0 / best->fitness) / 16);
+	if (generation <= nu_generations) {
+		if (rmse < rmse_threshold)
+			fgen_signal_stop(pop);
+	}
+	else if (generation <= nu_generations * 2) {
+		if (rmse < rmse_threshold * 1.5)
+			fgen_signal_stop(pop);
+	}
 }
 
 // Custom seeding function for 128-bit formats for archipelagos where each island is compressing the same block.
@@ -509,9 +588,9 @@ static void set_user_data(BlockUserData *user_data, Image *image, Texture *textu
 
 static char *etc2_modestr = "IDTHP";
 
-// Report the given GA solution in store its bitstring in the texture, printing information if required.
+// Report the given GA solution and store its bitstring in the texture, printing information if required.
 
-static void report_solution(FgenIndividual *best, BlockUserData *user_data) {
+static void report_solution(FgenIndividual *best, BlockUserData *user_data, int nu_gens) {
 	Texture *texture = user_data->texture;
 	int x_offset = user_data->x_offset;
 	int y_offset = user_data->y_offset;
@@ -545,7 +624,8 @@ static void report_solution(FgenIndividual *best, BlockUserData *user_data) {
 			mode_statistics[mode]++;
 		}
 		printf("Combined: ");
-		printf("RMSE per pixel: %lf\n", sqrt((1.0 / best->fitness) / 16));
+		printf("RMSE per pixel: %lf, ", sqrt((1.0 / best->fitness) / 16));
+		printf("GA generations: %d\n", nu_gens);
 	}
 	if (option_progress) {
 		int n = (texture->extended_width / texture->block_width) * (texture->extended_height / texture->block_height);
@@ -601,7 +681,7 @@ static void compress_with_single_population(Image *image, Texture *texture) {
 //				fgen_run_threaded(pop, nu_generations);
 //			else
 				fgen_run(pop, nu_generations);
-			report_solution(fgen_best_individual_of_population(pop), user_data);
+			report_solution(fgen_best_individual_of_population(pop), user_data, pop->generation);
 			if (user_data->stop_signalled)
 				goto end;
 		}
@@ -614,10 +694,6 @@ end :
 
 static void compress_with_archipelago(Image *image, Texture *texture) {
 	unsigned char *alpha_pixels = (unsigned char *)alloca(texture->block_width * texture->block_height);
-	if (option_generations != - 1)
-		nu_generations = option_generations;
-	if (option_islands != - 1)
-		nu_islands = option_islands;
 	FgenPopulation **pops = (FgenPopulation **)alloca(sizeof(FgenPopulation *) * nu_islands);
 	if (!option_quiet)
 		printf("Running GA archipelago of size %d for each pixel block, %d generations.\n", nu_islands,
@@ -627,7 +703,7 @@ static void compress_with_archipelago(Image *image, Texture *texture) {
 			population_size,		// Population size.
 			texture->bits_per_block,	// Number of bits.
 			1,				// Data element size.
-			generation_callback,
+			generation_callback_archipelago,
 			calculate_fitness,
 			seed,
 			fgen_mutation_per_bit_fast,
@@ -643,7 +719,7 @@ static void compress_with_archipelago(Image *image, Texture *texture) {
 			);
 		fgen_set_generation_callback_interval(pops[i], nu_generations);
 		fgen_set_migration_interval(pops[i], 0);	// No migration.
-		fgen_set_migration_probability(pops[i], 0.01);
+		fgen_set_migration_probability(pops[i], 0.05);
 		pops[i]->user_data = (BlockUserData *)malloc(sizeof(BlockUserData));
 		set_user_data((BlockUserData *)pops[i]->user_data, image, texture);
 		if (texture->type == TEXTURE_TYPE_ETC2_RGB8) {
@@ -781,7 +857,7 @@ static void compress_with_archipelago(Image *image, Texture *texture) {
 				}
 			// Report the best solution.
 			FgenIndividual *best = fgen_best_individual_of_archipelago(nu_islands, pops);
-			report_solution(best, (BlockUserData *)pops[0]->user_data);
+			report_solution(best, (BlockUserData *)pops[0]->user_data, pops[0]->generation);
 			if (((BlockUserData *)pops[0]->user_data)->stop_signalled)
 				goto end;
 		}
@@ -857,7 +933,7 @@ static void compress_multiple_blocks_concurrently(Image *image, Texture *texture
 			fgen_run_archipelago_threaded(nu_islands, pops, nu_generations);
 			for (int i = 0; i < nu_islands; i++) {
 				FgenIndividual *best = fgen_best_individual_of_population(pops[i]);
-				report_solution(best, (BlockUserData *)pops[i]->user_data);
+				report_solution(best, (BlockUserData *)pops[i]->user_data, pops[i]->generation);
 				if (((BlockUserData *)pops[i]->user_data)->stop_signalled)
 					goto end;
 			}
@@ -886,7 +962,150 @@ static void compress_multiple_blocks_concurrently(Image *image, Texture *texture
 		}
 		for (int i = 0; i < nu_blocks_left; i++) {
 			FgenIndividual *best = fgen_best_individual_of_population(pops[i]);
-			report_solution(best, (BlockUserData *)pops[i]->user_data);
+			report_solution(best, (BlockUserData *)pops[i]->user_data, pops[i]->generation);
+			if (((BlockUserData *)pops[i]->user_data)->stop_signalled)
+				goto end;
+		}
+	}
+end :
+	for (int i = 0; i < nu_islands; i++) {
+		free(pops[i]->user_data);
+		fgen_destroy(pops[i]);
+	}
+}
+
+// Seeding function for second_pass.
+
+static void seed_second_pass(FgenPopulation *pop, unsigned char *bitstring) {
+	BlockUserData *user_data = (BlockUserData *)pop->user_data;
+	Texture *texture = user_data->texture;
+	int x_offset = user_data->x_offset;
+	int y_offset = user_data->y_offset;
+	int compressed_block_index = (y_offset / texture->block_height) * (texture->extended_width / texture->block_width)
+		+ x_offset / texture->block_width;
+	if (texture->bits_per_block == 64) {
+		// Copy the 64-bit block.
+		*(unsigned int *)bitstring = texture->pixels[compressed_block_index * 2]; 
+		*(unsigned int *)&bitstring[4] = texture->pixels[compressed_block_index * 2 + 1];
+	}
+	else {
+		// Copy the 128-bit block.
+		*(unsigned int *)bitstring = texture->pixels[compressed_block_index * 4];
+		*(unsigned int *)&bitstring[4] = texture->pixels[compressed_block_index * 4 + 1];
+		*(unsigned int *)&bitstring[8] = texture->pixels[compressed_block_index * 4 + 2];
+		*(unsigned int *)&bitstring[12] = texture->pixels[compressed_block_index * 4 + 3];
+	}
+}
+
+// Generation call-back for second-pass.
+
+static void generation_callback_second_pass(FgenPopulation *pop, int generation) {
+	if (generation == 0)
+		return;
+	if (generation >= nu_generations) {
+		fgen_signal_stop(pop);
+		return;
+	}
+}
+
+// Perform the second-pass, processing multiple blocks concurrently.
+// Expectes nu_islands and nu_generations to be predefined.
+
+static void compress_multiple_blocks_concurrently_second_pass(Image *image, Texture *texture) {
+	unsigned char *alpha_pixels = (unsigned char *)alloca(texture->block_width * texture->block_height * nu_islands);
+	FgenPopulation **pops = (FgenPopulation **)alloca(sizeof(FgenPopulation *) * nu_islands);
+	// Use a very small population size of 8.
+	population_size = 8;
+	crossover_probability = 0;
+	// Use a lower mutation probability.
+	mutation_probability *= 0.66667;
+	if (!option_quiet)
+		printf("Running second pass GA for each pixel block, %d concurrently, generations = %d.\n",
+			nu_islands, nu_generations);
+	for (int i = 0; i < nu_islands; i++) {
+		pops[i] = fgen_create(
+			population_size,		// Population size.
+			texture->bits_per_block,	// Number of bits.
+			1,				// Data element size.
+			generation_callback_second_pass,
+			calculate_fitness,
+			seed_second_pass,
+			fgen_mutation_per_bit_fast,
+			fgen_crossover_uniform_per_bit
+			);
+		fgen_set_parameters(
+			pops[i],
+			FGEN_ELITIST_SUS,
+			FGEN_SUBTRACT_MIN_FITNESS,
+			crossover_probability,	// Crossover prob.
+			mutation_probability,	// Mutation prob. per bit
+			0		// Macro-mutation prob.
+			);
+		fgen_set_generation_callback_interval(pops[i], nu_generations);
+		fgen_set_migration_interval(pops[i], 0);	// No migration.
+		fgen_set_migration_probability(pops[i], 0.01);
+//		fgen_set_number_of_elites(pops[i], population_size / 2);
+		pops[i]->user_data = (BlockUserData *)malloc(sizeof(BlockUserData));
+		set_user_data((BlockUserData *)pops[i]->user_data, image, texture);
+		if (texture->type == TEXTURE_TYPE_ETC2_RGB8 || texture->type == TEXTURE_TYPE_ETC2_EAC)
+			if (option_allowed_modes_etc2 != - 1)
+				((BlockUserData *)pops[i]->user_data)->flags =
+					option_allowed_modes_etc2 | ENCODE_BIT;
+	}
+	if (!option_deterministic)
+		fgen_random_seed_with_timer(fgen_get_rng(pops[0]));
+	// Calculate the number of full archipelagos of nu_islands that fit on each each row.
+	int nu_full_archipelagos_per_row = image->extended_width / (nu_islands * texture->block_width);
+	int x_marker = nu_full_archipelagos_per_row * nu_islands * texture->block_width;
+	for (int y = 0; y < image->extended_height; y += texture->block_height) {
+		// Handle nu_islands horizontal blocks at a time.
+		for (int x = 0; x < x_marker; x+= nu_islands * texture->block_width) {
+			for (int i = 0; i < nu_islands; i++) {
+				BlockUserData *user_data = (BlockUserData *)pops[i]->user_data;
+				user_data->x_offset = x + i * texture->block_width;
+				user_data->y_offset = y;
+				// For 1-bit alpha texture, prepare the alpha values of the image block for use in the
+				// seeding function.
+				if (texture->type == TEXTURE_TYPE_DXT3 || texture->type == TEXTURE_TYPE_ETC2_PUNCHTHROUGH) {
+					set_alpha_pixels(image, x + i * texture->block_width, y, texture->block_width,
+						texture->block_height, &alpha_pixels[i * 16]);
+					user_data->alpha_pixels = &alpha_pixels[i * 16];
+				}
+			}
+			// Run with a seperate population on each island for different blocks.
+			fgen_run_archipelago_threaded(nu_islands, pops, nu_generations);
+			for (int i = 0; i < nu_islands; i++) {
+				FgenIndividual *best = fgen_best_individual_of_population(pops[i]);
+				report_solution(best, (BlockUserData *)pops[i]->user_data, pops[i]->generation);
+				if (((BlockUserData *)pops[i]->user_data)->stop_signalled)
+					goto end;
+			}
+		}
+		// Handle the remaining blocks on the row.
+		int nu_blocks_left = (image->extended_width - x_marker + texture->block_width - 1) / texture->block_width;
+		int x = x_marker;
+		for (int i = 0; i < nu_blocks_left; i++) {
+			BlockUserData *user_data = (BlockUserData *)pops[i]->user_data;
+			user_data->x_offset = x + i * texture->block_width;
+			user_data->y_offset = y;
+			// For 1-bit alpha texture, prepare the alpha values of the image block for use in the
+			// seeding function.
+			if (texture->type == TEXTURE_TYPE_DXT3 || texture->type == TEXTURE_TYPE_ETC2_PUNCHTHROUGH) {
+				set_alpha_pixels(image, x + i * texture->block_width, y, texture->block_width,
+					texture->block_height, &alpha_pixels[i * texture->block_width *
+					texture->block_height]);
+				user_data->alpha_pixels = &alpha_pixels[i * texture->block_width * texture->block_height];
+			}
+		}
+		if (nu_blocks_left > 0) {
+			if (nu_blocks_left > 1)
+				fgen_run_archipelago_threaded(nu_blocks_left, pops, - 1);
+			else
+				fgen_run(pops[0], - 1);
+		}
+		for (int i = 0; i < nu_blocks_left; i++) {
+			FgenIndividual *best = fgen_best_individual_of_population(pops[i]);
+			report_solution(best, (BlockUserData *)pops[i]->user_data, pops[i]->generation);
 			if (((BlockUserData *)pops[i]->user_data)->stop_signalled)
 				goto end;
 		}
@@ -938,7 +1157,19 @@ static void optimize_alpha(Image *image, Texture *texture) {
 
 // Calculate the RMSE threshold for adaptive block optimization.
 
-static double get_rmse_threshold(Texture *texture, int speed, Image *source_image) {
+static double get_rmse_threshold(Texture *texture, int level, Image *source_image) {
+	// Convert level to fixed speed grade for legacy code.
+	// A better implementation of threshold determination would emperically determine the threshold
+	// by compressing a number of sample blocks from the image.
+	int speed;
+	if (level < COMPRESSION_LEVEL_CLASS_1)
+		speed = SPEED_ULTRA;
+	else if (level < SPEED_MEDIUM)
+		speed = SPEED_FAST;
+	else if (level < SPEED_SLOW)
+		speed = SPEED_MEDIUM;
+	else
+		speed = SPEED_SLOW;
 	double threshold;
 	if (!(texture->type & TEXTURE_TYPE_128BIT_BIT)) {
 		// 64-bit texture formats.

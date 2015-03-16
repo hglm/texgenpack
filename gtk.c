@@ -1290,6 +1290,13 @@ GtkWidget *speed_radio_button[4];
 GtkWidget *combo_box_texture_format;
 GtkWidget *update_frequency_radio_button[5];
 
+static const int speed_table[4] = {
+	SPEED_ULTRA,
+	SPEED_FAST,
+	SPEED_MEDIUM,
+	SPEED_SLOW
+};
+
 static void menu_item_compression_settings_activate_cb(GtkMenuItem *menu_item, gpointer data) {
 	if (compression_active) {
 		popup_message("Cannot change compression settings while compression is being performed.");
@@ -1302,7 +1309,7 @@ static void menu_item_compression_settings_activate_cb(GtkMenuItem *menu_item, g
 		return;
 	for (int i = 0; i < 4; i++)
 		if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(speed_radio_button[i])))
-			option_speed = i;
+			option_compression_level = speed_table[i];
 	for (int i = 0; i < 5; i++)
 		if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(update_frequency_radio_button[i])))
 			compression_update_frequency_selection = i;
@@ -1533,13 +1540,14 @@ void gui_create_window_layout() {
 		gtk_radio_button_get_group(GTK_RADIO_BUTTON(speed_radio_button[0])),
                     "Slow (highest quality)");
 	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(speed_radio_button[0]), TRUE);
-	option_speed = SPEED_ULTRA;
+	option_compression_level = SPEED_FAST;
 	GtkWidget *content_area = gtk_dialog_get_content_area(GTK_DIALOG(compression_settings_dialog));
 	gtk_box_pack_start(GTK_BOX(content_area), label_speed, FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(content_area), speed_radio_button[0], FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(content_area), speed_radio_button[1], FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(content_area), speed_radio_button[2], FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(content_area), speed_radio_button[3], FALSE, FALSE, 0);
+	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(speed_radio_button[1]), TRUE);
 	GtkWidget *label_space = gtk_label_new("");
 	GtkWidget *label_texture_format = gtk_label_new("Texture format:");
 	combo_box_texture_format = gtk_combo_box_text_new();
