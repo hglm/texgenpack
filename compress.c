@@ -567,7 +567,7 @@ end : ;
 
 // Set the auxilliary data field for the GA population.
 
-static void set_user_data(BlockUserData *user_data, Image *image, Texture *texture) {
+static void set_user_data(BlockUserData *user_data, Image *image, Texture *texture, int pass) {
 	user_data->flags = ENCODE_BIT;
 	if (texture->type == TEXTURE_TYPE_ETC1)
 		user_data->flags |= ETC_MODE_ALLOWED_ALL;
@@ -584,6 +584,7 @@ static void set_user_data(BlockUserData *user_data, Image *image, Texture *textu
 		user_data->image_rowstride = image->extended_width * 4;
 	user_data->texture = texture;
 	user_data->stop_signalled = 0;
+	user_data->pass = pass;
 }
 
 static char *etc2_modestr = "IDTHP";
@@ -669,7 +670,7 @@ static void compress_with_single_population(Image *image, Texture *texture) {
 		fgen_random_seed_with_timer(fgen_get_rng(pop));
 //	fgen_random_seed_rng(fgen_get_rng(pop), 0);
 	pop->user_data = (BlockUserData *)malloc(sizeof(BlockUserData));
-	set_user_data((BlockUserData *)pop->user_data, image, texture);
+	set_user_data((BlockUserData *)pop->user_data, image, texture, 1);
 	for (int y = 0; y < image->extended_height; y += texture->block_height)
 		for (int x = 0; x < image->extended_width; x+= texture->block_width) {
 			BlockUserData *user_data = (BlockUserData *)pop->user_data;
@@ -721,7 +722,7 @@ static void compress_with_archipelago(Image *image, Texture *texture) {
 		fgen_set_migration_interval(pops[i], 0);	// No migration.
 		fgen_set_migration_probability(pops[i], 0.05);
 		pops[i]->user_data = (BlockUserData *)malloc(sizeof(BlockUserData));
-		set_user_data((BlockUserData *)pops[i]->user_data, image, texture);
+		set_user_data((BlockUserData *)pops[i]->user_data, image, texture, 1);
 		if (texture->type == TEXTURE_TYPE_ETC2_RGB8) {
 			if (option_allowed_modes_etc2 !=  - 1)
 				((BlockUserData *)pops[i]->user_data)->flags = option_allowed_modes_etc2 |
@@ -903,7 +904,7 @@ static void compress_multiple_blocks_concurrently(Image *image, Texture *texture
 		fgen_set_migration_interval(pops[i], 0);	// No migration.
 		fgen_set_migration_probability(pops[i], 0.01);
 		pops[i]->user_data = (BlockUserData *)malloc(sizeof(BlockUserData));
-		set_user_data((BlockUserData *)pops[i]->user_data, image, texture);
+		set_user_data((BlockUserData *)pops[i]->user_data, image, texture, 1);
 		if (texture->type == TEXTURE_TYPE_ETC2_RGB8 || texture->type == TEXTURE_TYPE_ETC2_EAC)
 			if (option_allowed_modes_etc2 != - 1)
 				((BlockUserData *)pops[i]->user_data)->flags =
@@ -1046,7 +1047,7 @@ static void compress_multiple_blocks_concurrently_second_pass(Image *image, Text
 		fgen_set_migration_probability(pops[i], 0.01);
 //		fgen_set_number_of_elites(pops[i], population_size / 2);
 		pops[i]->user_data = (BlockUserData *)malloc(sizeof(BlockUserData));
-		set_user_data((BlockUserData *)pops[i]->user_data, image, texture);
+		set_user_data((BlockUserData *)pops[i]->user_data, image, texture, 2);
 		if (texture->type == TEXTURE_TYPE_ETC2_RGB8 || texture->type == TEXTURE_TYPE_ETC2_EAC)
 			if (option_allowed_modes_etc2 != - 1)
 				((BlockUserData *)pops[i]->user_data)->flags =

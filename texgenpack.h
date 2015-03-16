@@ -161,6 +161,7 @@ struct BlockUserData_t {
 	Texture *texture;
 	unsigned char *alpha_pixels;
 	int stop_signalled;
+	int pass;
 };
 
 typedef void (*CompressCallbackFunction)(BlockUserData *user_data);

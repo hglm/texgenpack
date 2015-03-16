@@ -334,10 +334,17 @@ static int compression_update_frequency_selection = 2;
 
 // Calculate progress and return true if the window needs to be updated.
 
-static int calculate_progress(Texture *texture, int compressed_block_index) {
+static int current_pass;
+
+static int calculate_progress(Texture *texture, int compressed_block_index, int pass) {
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
 	double current_time = tv.tv_sec + tv.tv_usec * 0.000001;
+	if (pass == 2 && current_pass == 1) {
+		compress_start_time = current_time;
+		last_compress_progress_time = current_time;
+		current_pass = 2;
+	}
 	if (current_time - last_compress_progress_time >=
 	compression_update_frequency_table[compression_update_frequency_selection]) {
 		compress_progress = (double)compressed_block_index /
@@ -378,7 +385,7 @@ static void compress_callback(BlockUserData *user_data) {
 				pack_rgba(pixel_get_b(pixel), pixel_get_g(pixel), pixel_get_r(pixel),
 						pixel_get_a(pixel));
 		}
-        if (calculate_progress(texture, compressed_block_index)) {
+        if (calculate_progress(texture, compressed_block_index, user_data->pass)) {
 		gui_create_base_surface(1);
 		gui_draw_and_show_window();
 	}
@@ -414,7 +421,7 @@ static void compress_half_float_callback(BlockUserData *user_data) {
 				current_image[1][mipmap_level_being_compressed].extended_width + (x + j)) * 2] =
 				pixel64;
 		}
-        if (calculate_progress(texture, compressed_block_index)) {
+        if (calculate_progress(texture, compressed_block_index, user_data->pass)) {
 		gui_create_base_surface(1);
 		gui_draw_and_show_window();
 	}
@@ -449,7 +456,7 @@ static void compress_rg16_callback(BlockUserData *user_data) {
 				current_image[1][mipmap_level_being_compressed].extended_width + (x + j)] =
 				pixel;
 		}
-       if (calculate_progress(texture, compressed_block_index)) {
+       if (calculate_progress(texture, compressed_block_index, user_data->pass)) {
 		gui_create_base_surface(1);
 		gui_draw_and_show_window();
 	}
@@ -546,6 +553,7 @@ static void menu_item_compress_activate_cb(GtkMenuItem *menu_item, gpointer data
 		compress_start_time = tv.tv_sec + tv.tv_usec * 0.000001;
 		compress_progress = 0;
 		last_compress_progress_time = compress_start_time;
+		current_pass = 1;
 		if (format & TEXTURE_TYPE_ASTC_BIT) {
 			// Make sure the window shows compression has started.
 			current_file_type[1] = FILE_TYPE_IMAGE_UNKNOWN;
@@ -862,7 +870,7 @@ again : ;
 			g_free(filename);
 			goto again;
 		}
-		const char *title_str = "texview texture viewer";
+		const char *title_str = "texgenpack-gui texture conversion utility";
 		char *s = (char *)malloc(strlen(filename) + strlen(title_str) + 3 + 1);
 		sprintf(s, "%s (%s)", title_str, filename);
     		gtk_window_set_title(GTK_WINDOW(gtk_window), s);
