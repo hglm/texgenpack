@@ -1,5 +1,5 @@
 
-texgenpack v0.8.2 -- texture compression using a genetic algorithm.
+texgenpack v0.9 -- texture compression using a genetic algorithm.
 
 **** Introduction ****
 
@@ -182,6 +182,10 @@ of 10.
 For compression levels in the range 8 to 50, an adaptive scheme has been
 implemented whereby the number of generations of the genetic algorithm is
 doubled or tripled when the compressed block is not of sufficient quality.
+These levels also utilize a perceptive quality strategy by default that
+incorporates differences between adjacent pixels and can result in better
+looking results, even when the absolute pixel component differences are
+a little greater than the standard method.
 
 For all compression levels, a short second-pass is performed that uses
 a genetic algorithm with a small population size to fine-tune the end result.

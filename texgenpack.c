@@ -56,19 +56,22 @@ int option_allowed_modes_etc2 = - 1;
 int option_mipmaps = 0;
 int option_generations = - 1;
 int option_islands = - 1;
+int option_generations_second_pass = - 1;
+int option_islands_second_pass = - 1;
 int option_flip_vertical = 0;
 int option_quiet = 0;
 int option_block_width = 4;
 int option_block_height = 4;
 int option_half_float = 0;
 int option_hdr = 0;
+int option_perceptive = 1;
 
 // Other option variables that are not actually set by command-line options.
 
 int option_deterministic = 0;
 
 static char *instructions1 =
-"texgenpack v0.8.2 -- Texture conversion and compression using a genetic algorithm.\n"
+"texgenpack v0.9 -- Texture conversion and compression using a genetic algorithm.\n"
 "Usage: texgenpack <command> <options> <source filename> <destination filename>.\n"
 "\n"
 "Commands:\n";
@@ -78,7 +81,7 @@ static char *instructions1 =
 static const char *commands[NU_COMMANDS] = {
 	"--compress", "--decompress", "--compare", "--calibrate" };
 
-#define NU_OPTIONS 20
+#define NU_OPTIONS 23
 
 enum {
 	OPTION_COMPRESSION_LEVEL = 0,
@@ -86,6 +89,7 @@ enum {
 	OPTION_FAST,
 	OPTION_MEDIUM,
 	OPTION_SLOW,
+	OPTION_NON_PERCEPTIVE,
 	OPTION_TEXTURE_FORMAT,
 	OPTION_HALF_FLOAT,
 	OPTION_HDR,
@@ -97,6 +101,8 @@ enum {
 	OPTION_MAXTHREADS,
 	OPTION_GENERATIONS,
 	OPTION_ISLANDS,
+	OPTION_GENERATIONS_SECOND_PASS,
+	OPTION_ISLANDS_SECOND_PASS,
 	OPTION_PROGRESS,
 	OPTION_VERBOSE,
 	OPTION_VERY_VERBOSE,
@@ -105,12 +111,13 @@ enum {
 
 static const char *options[NU_OPTIONS] = {
 	"--level", "--ultra", "--fast", "--medium", "--slow",
+	"--non-perceptive",
 	"--format",
 	"--half-float", "--hdr",
 	"--mipmaps",
 	"--orientation", "--flip-vertical",
 	"--modal", "--allowed-modes",
-	"--maxthreads", "--generations", "--islands",
+	"--maxthreads", "--generations", "--islands", "--generations-second-pass", "--islands-second-pass",
 	"--progress", "--verbose", "--very-verbose", "--quiet",
 };
 
@@ -131,6 +138,7 @@ static const char *option_description[NU_OPTIONS] = {
 	"Fast compression method (level = 8) (default).",
 	"Medium compression method (level = 16).",
 	"Slow compression method (level = 32).",
+	"Use non-perceptive quality strategy (defaalt for --ultra setting).",
 	"Texture format. One of the following: ",
 	"Convert regular images to half-float format before compression.",
 	"The half-float format contains a HDR texture that is not normalized. This affects compression.",
@@ -143,6 +151,10 @@ static const char *option_description[NU_OPTIONS] = {
 	"Specify the maximum number of threads to use (not recommended; uses --islands option to control threading level).",
 	"Set the number of generations for the genetic algorithm per block (adjusted from compression level).",
 	"Set the number of concurrent islands for the genetic algorithm (adjusted from compression level).",
+	"Set the number of generations for the second pass of the genetic algorithm per block (adjusted from "
+	"compression level).",
+	"Set the number of concurrent islands for the second pass of the genetic algorithm (adjusted from "
+	"compression level).",
 	"Display a percentage progress indicator.",
 	"Be verbose (information for each block).",
 	"Be very verbose (more information for each block).",
@@ -213,6 +225,10 @@ int main(int argc, char **argv) {
 			continue;
 		case OPTION_SLOW :
 			option_compression_level = SPEED_SLOW;
+			i++;
+			continue;
+		case OPTION_NON_PERCEPTIVE :
+			option_perceptive = 0;
 			i++;
 			continue;
 		case OPTION_PROGRESS :
@@ -330,6 +346,24 @@ int main(int argc, char **argv) {
 				exit(1);
 			}
 			option_islands = value;
+			i += 2;
+			break;
+		case OPTION_GENERATIONS_SECOND_PASS :
+			value = atoi(argv[i + 1]);
+			if (value < 1 || value > 100000) {
+				printf("Error -- invalid number of generations specified (range 1-100000).\n");
+				exit(1);
+			}
+			option_generations_second_pass = value;
+			i += 2;
+			break;
+		case OPTION_ISLANDS_SECOND_PASS :
+			value = atoi(argv[i + 1]);
+			if (value < 1 || value > 64) {
+				printf("Error -- invalid number of islands specified (range 1-64).\n");
+				exit(1);
+			}
+			option_islands_second_pass = value;
 			i += 2;
 			break;
 		case OPTION_COMPRESSION_LEVEL :

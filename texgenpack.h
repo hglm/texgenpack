@@ -149,6 +149,7 @@ typedef struct {
 	int block_height;
 	TextureDecodingFunction decoding_function;
 	TextureComparisonFunction comparison_function;
+	TextureComparisonFunction perceptive_comparison_function;
 	TextureInfo *info;
 } Texture;
 
@@ -162,6 +163,9 @@ struct BlockUserData_t {
 	unsigned char *alpha_pixels;
 	int stop_signalled;
 	int pass;
+	unsigned int *texture_pixels;
+	unsigned int *texture_pixels_above;
+	unsigned int *texture_pixels_left;
 };
 
 typedef void (*CompressCallbackFunction)(BlockUserData *user_data);
@@ -212,6 +216,8 @@ extern int option_modal_etc2;
 extern int option_allowed_modes_etc2;
 extern int option_generations;
 extern int option_islands;
+extern int option_generations_second_pass;
+extern int option_islands_second_pass;
 extern int option_texture_format;
 extern int option_flip_vertical;
 extern int option_quiet;
@@ -220,6 +226,7 @@ extern int option_block_height;
 extern int option_half_float;
 extern int option_deterministic;
 extern int option_hdr;
+extern int option_perceptive;
 
 // Defined in image.c
 
@@ -297,6 +304,7 @@ extern float *normalized_float_table;
 
 double compare_block_any_size_rgba(unsigned int *image_buffer, BlockUserData *user_data);
 double compare_block_4x4_rgb(unsigned int *image_buffer, BlockUserData *user_data);
+double compare_block_perceptive_4x4_rgb(unsigned int *image_buffer, BlockUserData *user_data);
 double compare_block_4x4_rgba(unsigned int *image_buffer, BlockUserData *user_data);
 void calculate_normalized_float_table();
 double compare_block_4x4_rgb8_with_half_float(unsigned int *image_buffer, BlockUserData *user_data);

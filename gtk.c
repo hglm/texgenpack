@@ -1295,6 +1295,7 @@ static void menu_item_hdr_display_settings_activate_cb(GtkMenuItem *menu_item, g
 
 GtkWidget *compression_settings_dialog;
 GtkWidget *speed_radio_button[4];
+GtkWidget *perceptive_check_button;
 GtkWidget *combo_box_texture_format;
 GtkWidget *update_frequency_radio_button[5];
 
@@ -1318,6 +1319,7 @@ static void menu_item_compression_settings_activate_cb(GtkMenuItem *menu_item, g
 	for (int i = 0; i < 4; i++)
 		if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(speed_radio_button[i])))
 			option_compression_level = speed_table[i];
+	option_perceptive = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(perceptive_check_button));
 	for (int i = 0; i < 5; i++)
 		if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(update_frequency_radio_button[i])))
 			compression_update_frequency_selection = i;
@@ -1556,6 +1558,13 @@ void gui_create_window_layout() {
 	gtk_box_pack_start(GTK_BOX(content_area), speed_radio_button[2], FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(content_area), speed_radio_button[3], FALSE, FALSE, 0);
 	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(speed_radio_button[1]), TRUE);
+
+	GtkWidget *label_space_perceptive = gtk_label_new("");
+	perceptive_check_button = gtk_check_button_new_with_label("Perceptive compression quality");
+	gtk_box_pack_start(GTK_BOX(content_area), label_space_perceptive, FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(content_area), perceptive_check_button, FALSE, FALSE, 0);
+	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(perceptive_check_button), TRUE);
+
 	GtkWidget *label_space = gtk_label_new("");
 	GtkWidget *label_texture_format = gtk_label_new("Texture format:");
 	combo_box_texture_format = gtk_combo_box_text_new();

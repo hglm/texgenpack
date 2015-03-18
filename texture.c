@@ -253,6 +253,7 @@ const char *texture_type_text(int texture_type) {
 void set_texture_decoding_function(Texture *texture, Image *image) {
 	TextureDecodingFunction decoding_func;
 	TextureComparisonFunction comparison_func;
+	TextureComparisonFunction perceptive_comparison_func = NULL;
 	if (texture->type >= TEXTURE_TYPE_RGBA_ASTC_4X4 && texture->type <= TEXTURE_TYPE_RGBA_ASTC_12X12) {
 		decoding_func = draw_block_rgba_astc;
 		comparison_func = compare_block_any_size_rgba;
@@ -358,6 +359,7 @@ void set_texture_decoding_function(Texture *texture, Image *image) {
 	case TEXTURE_TYPE_ETC2_SRGB8 :
 	case TEXTURE_TYPE_DXT1 :
 		comparison_func = compare_block_4x4_rgb;
+		perceptive_comparison_func = compare_block_perceptive_4x4_rgb;
 		break;
 	case TEXTURE_TYPE_UNCOMPRESSED_RGBA8 :
 	case TEXTURE_TYPE_UNCOMPRESSED_ARGB8 :
@@ -436,6 +438,7 @@ end :
 	}
 	texture->decoding_function = decoding_func;
 	texture->comparison_function = comparison_func;
+	texture->perceptive_comparison_function = perceptive_comparison_func;
 }
 
 int get_number_of_texture_formats() {

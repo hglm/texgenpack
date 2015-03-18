@@ -45,6 +45,8 @@ int option_allowed_modes_etc2 = - 1;
 int option_mipmaps = 0;
 int option_generations = - 1;
 int option_islands = - 1;
+int option_generations_second_pass = - 1;
+int option_islands_second_pass = - 1;
 int option_flip_vertical = 0;
 int option_quiet = 0;
 int option_block_width = 4;
@@ -53,6 +55,7 @@ int option_half_float = 0;
 int option_deterministic = 0;
 int option_half_float_fit_to_range = 0;
 int option_hdr = 0;
+int option_perceptive = 1;
 
 // Global variables
 
