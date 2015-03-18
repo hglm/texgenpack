@@ -306,6 +306,7 @@ double compare_block_any_size_rgba(unsigned int *image_buffer, BlockUserData *us
 double compare_block_4x4_rgb(unsigned int *image_buffer, BlockUserData *user_data);
 double compare_block_perceptive_4x4_rgb(unsigned int *image_buffer, BlockUserData *user_data);
 double compare_block_4x4_rgba(unsigned int *image_buffer, BlockUserData *user_data);
+double compare_block_perceptive_4x4_rgba(unsigned int *image_buffer, BlockUserData *user_data);
 void calculate_normalized_float_table();
 double compare_block_4x4_rgb8_with_half_float(unsigned int *image_buffer, BlockUserData *user_data);
 double compare_block_4x4_rgba8_with_half_float(unsigned int *image_buffer, BlockUserData *user_data);

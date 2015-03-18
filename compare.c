@@ -32,6 +32,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 static double compare_border_block_4x4_rgb(unsigned int *image_buffer, BlockUserData *user_data);
 static double compare_border_block_4x4_rgba(unsigned int *image_buffer, BlockUserData *user_data);
 static double compare_border_block_perceptive_4x4_rgb(unsigned int *image_buffer, BlockUserData *user_data);
+static double compare_border_block_perceptive_4x4_rgba(unsigned int *image_buffer, BlockUserData *user_data);
 
 // Compare block image with source image with regular RGBA encoded 32-bit pixels, any block size.
 
@@ -138,6 +139,33 @@ double compare_block_any_size_rgba(unsigned int *image_buffer, BlockUserData *us
 	blue_diff[y][x] = b1 - b2; \
 	}
 
+#define get_component_differences_with_alpha_xy(valx, valy) \
+	{ \
+	int x = valx; \
+	int y = valy; \
+	unsigned int pixel1 = pix1[y * 4 + x]; \
+	unsigned int pixel2 = pix2[y * (user_data->image_rowstride / 4) + x]; \
+	int a1 = pixel_get_a(pixel1); \
+	int a2 = pixel_get_a(pixel2); \
+	alpha_diff[y][x] = a1 - a2; \
+	if ((a1 | a2) == 0) { \
+		red_diff[y][x] = 0; \
+		green_diff[y][x] = 0; \
+		blue_diff[y][x] = 0; \
+	} \
+	else { \
+		int r1 = pixel_get_r(pixel1); \
+		int g1 = pixel_get_g(pixel1); \
+		int b1 = pixel_get_b(pixel1); \
+		int r2 = pixel_get_r(pixel2); \
+		int g2 = pixel_get_g(pixel2); \
+		int b2 = pixel_get_b(pixel2); \
+		red_diff[y][x] = r1 - r2; \
+		green_diff[y][x] = g1 - g2; \
+		blue_diff[y][x] = b1 - b2; \
+	} \
+	}
+
 #define get_component_differences_above_x(valx) \
 	{ \
 	int x = valx; \
@@ -152,6 +180,32 @@ double compare_block_any_size_rgba(unsigned int *image_buffer, BlockUserData *us
 	red_diff_above = r1 - r2; \
 	green_diff_above = g1 - g2; \
 	blue_diff_above = b1 - b2; \
+	}
+
+#define get_component_differences_with_alpha_above_x(valx) \
+	{ \
+	int x = valx; \
+	unsigned int pixel1 = pix1_above[3 * 4 + x]; \
+	unsigned int pixel2 = pix2[- (user_data->image_rowstride / 4) + x]; \
+	int a1 = pixel_get_a(pixel1); \
+	int a2 = pixel_get_a(pixel2); \
+	alpha_diff_above = a1 - a2; \
+	if ((a1 | a2) == 0) { \
+		red_diff_above = 0; \
+		green_diff_above = 0; \
+		blue_diff_above = 0; \
+	} \
+	else { \
+		int r1 = pixel_get_r(pixel1); \
+		int g1 = pixel_get_g(pixel1); \
+		int b1 = pixel_get_b(pixel1); \
+		int r2 = pixel_get_r(pixel2); \
+		int g2 = pixel_get_g(pixel2); \
+		int b2 = pixel_get_b(pixel2); \
+		red_diff_above = r1 - r2; \
+		green_diff_above = g1 - g2; \
+		blue_diff_above = b1 - b2; \
+	} \
 	}
 
 #define get_component_differences_left_y(valy) \
@@ -170,12 +224,47 @@ double compare_block_any_size_rgba(unsigned int *image_buffer, BlockUserData *us
 	blue_diff_left = b1 - b2; \
 	}
 
+#define get_component_differences_with_alpha_left_y(valy) \
+	{ \
+	int y = valy; \
+	unsigned int pixel1 = pix1_left[y * 4 + 3]; \
+	unsigned int pixel2 = pix2[y * (user_data->image_rowstride / 4) - 1]; \
+	int a1 = pixel_get_a(pixel1); \
+	int a2 = pixel_get_a(pixel2); \
+	alpha_diff_left = a1 - a2; \
+	if ((a1 | a2) == 0) { \
+		red_diff_left = 0; \
+		green_diff_left = 0; \
+		blue_diff_left = 0; \
+	} \
+	else { \
+		int r1 = pixel_get_r(pixel1); \
+		int g1 = pixel_get_g(pixel1); \
+		int b1 = pixel_get_b(pixel1); \
+		int r2 = pixel_get_r(pixel2); \
+		int g2 = pixel_get_g(pixel2); \
+		int b2 = pixel_get_b(pixel2); \
+		red_diff_left = r1 - r2; \
+		green_diff_left = g1 - g2; \
+		blue_diff_left = b1 - b2; \
+	} \
+	}
+
 #define compare_adjacent_pixels(x1, y1, x2, y2) \
 	{ \
 	int dred = (red_diff[y1][x1] - red_diff[y2][x2]); \
 	int dgreen = (green_diff[y1][x1] - green_diff[y2][x2]); \
 	int dblue = (blue_diff[y1][x1] - blue_diff[y2][x2]); \
 	error += (dred * dred + dgreen * dgreen + dblue * dblue) / 4; \
+	}
+
+#define compare_adjacent_pixels_with_alpha(x1, y1, x2, y2) \
+	{ \
+	int dred = (red_diff[y1][x1] - red_diff[y2][x2]); \
+	int dgreen = (green_diff[y1][x1] - green_diff[y2][x2]); \
+	int dblue = (blue_diff[y1][x1] - blue_diff[y2][x2]); \
+	int dalpha = (alpha_diff[y1][x1] - alpha_diff[y2][x2]); \
+	error += (dred * dred + dgreen * dgreen + dblue * dblue + dalpha * dalpha) / 4; \
 	}
 
 #define compare_adjacent_pixels_check(x1, y1, x2, y2) \
@@ -187,6 +276,16 @@ double compare_block_any_size_rgba(unsigned int *image_buffer, BlockUserData *us
 	error += (dred * dred + dgreen * dgreen + dblue * dblue) / 4; \
 	}
 
+#define compare_adjacent_pixels_with_alpha_check(x1, y1, x2, y2) \
+	if (x1 < w && y1 < h && x2 < w && y2 < h) \
+	{ \
+	int dred = (red_diff[y1][x1] - red_diff[y2][x2]); \
+	int dgreen = (green_diff[y1][x1] - green_diff[y2][x2]); \
+	int dblue = (blue_diff[y1][x1] - blue_diff[y2][x2]); \
+	int dalpha = (alpha_diff[y1][x1] - alpha_diff[y2][x2]); \
+	error += (dred * dred + dgreen * dgreen + dblue * dblue + dalpha * dalpha) / 4; \
+	}
+
 #define compare_adjacent_pixels_block_above(x1, y1, x2, y2) \
 	{ \
 	int dred = (red_diff[y1][x1] - red_diff_above); \
@@ -195,12 +294,30 @@ double compare_block_any_size_rgba(unsigned int *image_buffer, BlockUserData *us
 	error += (dred * dred + dgreen * dgreen + dblue * dblue) / 4; \
 	}
 
+#define compare_adjacent_pixels_with_alpha_block_above(x1, y1, x2, y2) \
+	{ \
+	int dred = (red_diff[y1][x1] - red_diff_above); \
+	int dgreen = (green_diff[y1][x1] - green_diff_above); \
+	int dblue = (blue_diff[y1][x1] - blue_diff_above); \
+	int dalpha = (alpha_diff[y1][x1] - alpha_diff_above); \
+	error += (dred * dred + dgreen * dgreen + dblue * dblue + dalpha * dalpha) / 4; \
+	}
+
 #define compare_adjacent_pixels_block_left(x1, y1, x2, y2) \
 	{ \
 	int dred = (red_diff[y1][x1] - red_diff_left); \
 	int dgreen = (green_diff[y1][x1] - green_diff_left); \
 	int dblue = (blue_diff[y1][x1] - blue_diff_left); \
 	error += (dred * dred + dgreen * dgreen + dblue * dblue) / 4; \
+	}
+
+#define compare_adjacent_pixels_with_alpha_block_left(x1, y1, x2, y2) \
+	{ \
+	int dred = (red_diff[y1][x1] - red_diff_left); \
+	int dgreen = (green_diff[y1][x1] - green_diff_left); \
+	int dblue = (blue_diff[y1][x1] - blue_diff_left); \
+	int dalpha = (alpha_diff[y1][x1] - alpha_diff_left); \
+	error += (dred * dred + dgreen * dgreen + dblue * dblue + dalpha * dalpha) / 4; \
 	}
 
 // Compare block image with source image with regular RGB encoded into each 32-bit pixel, block size 4x4.
@@ -355,6 +472,100 @@ double compare_block_4x4_rgba(unsigned int *image_buffer, BlockUserData *user_da
 	compare_pixel_xy_with_alpha(1, 3);
 	compare_pixel_xy_with_alpha(2, 3);
 	compare_pixel_xy_with_alpha(3, 3);
+	return (double)1 / error;
+}
+
+double compare_block_perceptive_4x4_rgba(unsigned int *image_buffer, BlockUserData *user_data) {
+	// When on the borders, use the unoptimized version.
+	if ((user_data->x_offset + 4 > user_data->texture->width) ||
+	(user_data->y_offset + 4 > user_data->texture->height))
+		return compare_border_block_perceptive_4x4_rgba(image_buffer, user_data);
+	unsigned int *pix1 = image_buffer;
+	unsigned int *pix2 = user_data->image_pixels + user_data->y_offset * (user_data->image_rowstride / 4) +
+		user_data->x_offset;
+	int red_diff[4][4], green_diff[4][4], blue_diff[4][4], alpha_diff[4][4];
+	get_component_differences_with_alpha_xy(0, 0);
+	get_component_differences_with_alpha_xy(1, 0);
+	get_component_differences_with_alpha_xy(2, 0);
+	get_component_differences_with_alpha_xy(3, 0);
+	get_component_differences_with_alpha_xy(0, 1);
+	get_component_differences_with_alpha_xy(1, 1);
+	get_component_differences_with_alpha_xy(2, 1);
+	get_component_differences_with_alpha_xy(3, 1);
+	get_component_differences_with_alpha_xy(0, 2);
+	get_component_differences_with_alpha_xy(1, 2);
+	get_component_differences_with_alpha_xy(2, 2);
+	get_component_differences_with_alpha_xy(3, 2);
+	get_component_differences_with_alpha_xy(0, 3);
+	get_component_differences_with_alpha_xy(1, 3);
+	get_component_differences_with_alpha_xy(2, 3);
+	get_component_differences_with_alpha_xy(3, 3);
+	int error = 0;
+	// Add regular error.
+	for (int y = 0; y < 4; y ++)
+		for (int x = 0; x < 4; x++) {
+			error += red_diff[y][x] * red_diff[y][x];
+			error += green_diff[y][x] * green_diff[y][x];
+			error += blue_diff[y][x] * blue_diff[y][x];
+			error += alpha_diff[y][x] * alpha_diff[y][x];
+		}
+	// For pixels below the top row and to the right of the left column, add errors based on
+	// differences between adjacent pixels.
+	// pixel (1, 1)
+	compare_adjacent_pixels_with_alpha(1, 1, 1, 0);	// above
+	compare_adjacent_pixels_with_alpha(1, 1, 0, 1);	// left
+	compare_adjacent_pixels_with_alpha(1, 1, 1, 2);	// below
+	compare_adjacent_pixels_with_alpha(1, 1, 2, 1);	// right
+	// pixel (2, 1)
+	compare_adjacent_pixels_with_alpha(2, 1, 2, 0);	// above
+	compare_adjacent_pixels_with_alpha(2, 1, 2, 2);	// below
+	compare_adjacent_pixels_with_alpha(2, 1, 3, 1);	// right
+	// pixel (3, 1)
+	compare_adjacent_pixels_with_alpha(3, 1, 3, 0);	// above
+	compare_adjacent_pixels_with_alpha(3, 1, 3, 2);	// below
+	// pixel (1, 2)
+	compare_adjacent_pixels_with_alpha(1, 2, 0, 2);	// left
+	compare_adjacent_pixels_with_alpha(1, 2, 1, 3);	// below
+	compare_adjacent_pixels_with_alpha(1, 2, 2, 2);	// right
+	// pixel (2, 2)
+	compare_adjacent_pixels_with_alpha(2, 2, 2, 3);	// below
+	compare_adjacent_pixels_with_alpha(2, 2, 3, 2);	// right
+	// pixel (3, 2)
+	compare_adjacent_pixels_with_alpha(3, 2, 3, 3);	// below
+	// pixel (1, 3)
+	compare_adjacent_pixels_with_alpha(1, 3, 0, 3);	// left
+	compare_adjacent_pixels_with_alpha(1, 3, 2, 3);	// right
+	// pixel (2, 3)
+	compare_adjacent_pixels_with_alpha(2, 3, 3, 3);	// right
+
+	// Add errors based on differences between adjacent pixels for top row pixels, comparing with the
+	// block above.
+	if (user_data->texture_pixels_above != NULL) {
+		int red_diff_above, green_diff_above, blue_diff_above, alpha_diff_above;
+		unsigned int *pix1_above = user_data->texture_pixels_above;
+		get_component_differences_with_alpha_above_x(0);
+		compare_adjacent_pixels_with_alpha_block_above(0, 0, 0, 3);
+		get_component_differences_with_alpha_above_x(1);
+		compare_adjacent_pixels_with_alpha_block_above(1, 0, 1, 3);
+		get_component_differences_with_alpha_above_x(2);
+		compare_adjacent_pixels_with_alpha_block_above(2, 0, 2, 3);
+		get_component_differences_with_alpha_above_x(3);
+		compare_adjacent_pixels_with_alpha_block_above(3, 0, 3, 3);
+	}
+	// Add errors based on differences between adjacent pixels for left column pixels, comparing with the
+	// block to the left.
+	if (user_data->texture_pixels_left != NULL) {
+		int red_diff_left, green_diff_left, blue_diff_left, alpha_diff_left;
+		unsigned int *pix1_left = user_data->texture_pixels_left;
+		get_component_differences_with_alpha_left_y(0);
+		compare_adjacent_pixels_with_alpha_block_left(0, 0, 3, 0);
+		get_component_differences_with_alpha_left_y(1);
+		compare_adjacent_pixels_with_alpha_block_left(0, 1, 3, 1);
+		get_component_differences_with_alpha_left_y(2);
+		compare_adjacent_pixels_with_alpha_block_left(0, 2, 3, 2);
+		get_component_differences_with_alpha_left_y(3);
+		compare_adjacent_pixels_with_alpha_block_left(0, 3, 3, 3);
+	}
 	return (double)1 / error;
 }
 
@@ -553,6 +764,128 @@ double compare_border_block_4x4_rgba(unsigned int *image_buffer, BlockUserData *
 	return (double)1 / error;
 }
 
+double compare_border_block_perceptive_4x4_rgba(unsigned int *image_buffer, BlockUserData *user_data) {
+	int w;
+	if (user_data->x_offset + 4 > user_data->texture->width)
+		w = user_data->texture->width - user_data->x_offset;
+	else
+		w = 4;
+	int h;
+	if (user_data->y_offset + 4 > user_data->texture->height)
+		h = user_data->texture->height - user_data->y_offset;
+	else
+		h = 4;
+	unsigned int *pix1 = image_buffer;
+	unsigned int *pix2 = user_data->image_pixels + user_data->y_offset * (user_data->image_rowstride / 4) +
+		user_data->x_offset;
+	int red_diff[4][4], green_diff[4][4], blue_diff[4][4], alpha_diff[4][4];
+	for (int y = 0; y < h; y++) {
+		for (int x = 0; x < w; x++) {
+			unsigned int pixel1 = pix1[x];
+			unsigned int pixel2 = pix2[x];
+			int a1 = pixel_get_a(pixel1);
+			int a2 = pixel_get_a(pixel2);
+			alpha_diff[y][x] = a1 - a2;
+			if ((a1 | a2) == 0) {
+				red_diff[y][x] = 0;
+				green_diff[y][x] = 0;
+				blue_diff[y][x] = 0;
+			}
+			else {
+				int r1 = pixel_get_r(pixel1);
+				int g1 = pixel_get_g(pixel1);
+				int b1 = pixel_get_b(pixel1);
+				int r2 = pixel_get_r(pixel2);
+				int g2 = pixel_get_g(pixel2);
+				int b2 = pixel_get_b(pixel2);
+				red_diff[y][x] = (r1 - r2);
+				green_diff[y][x] = (g1 - g2);
+				blue_diff[y][x] = (b1 - b2);
+			}
+		}
+		pix1 = &pix1[4];
+		pix2 += user_data->image_rowstride / 4;
+	}
+	int error = 0;
+	// Add regular error.
+	for (int y = 0; y < h; y++)
+		for (int x = 0; x < w; x++) {
+			error += red_diff[y][x] * red_diff[y][x];
+			error += green_diff[y][x] * green_diff[y][x];
+			error += blue_diff[y][x] * blue_diff[y][x];
+			error += alpha_diff[y][x] * alpha_diff[y][x];
+		}
+	// For pixels below the top row and to the right of the left column, add errors based on
+	// differences between adjacent pixels.
+	// pixel (1, 1)
+	compare_adjacent_pixels_with_alpha_check(1, 1, 1, 0);	// above
+	compare_adjacent_pixels_with_alpha_check(1, 1, 0, 1);	// left
+	compare_adjacent_pixels_with_alpha_check(1, 1, 1, 2);	// below
+	compare_adjacent_pixels_with_alpha_check(1, 1, 2, 1);	// right
+	// pixel (2, 1)
+	compare_adjacent_pixels_with_alpha_check(2, 1, 2, 0);	// above
+	compare_adjacent_pixels_with_alpha_check(2, 1, 2, 2);	// below
+	compare_adjacent_pixels_with_alpha_check(2, 1, 3, 1);	// right
+	// pixel (3, 1)
+	compare_adjacent_pixels_with_alpha_check(3, 1, 3, 0);	// above
+	compare_adjacent_pixels_with_alpha_check(3, 1, 3, 2);	// below
+	// pixel (1, 2)
+	compare_adjacent_pixels_with_alpha_check(1, 2, 0, 2);	// left
+	compare_adjacent_pixels_with_alpha_check(1, 2, 1, 3);	// below
+	compare_adjacent_pixels_with_alpha_check(1, 2, 2, 2);	// right
+	// pixel (2, 2)
+	compare_adjacent_pixels_with_alpha_check(2, 2, 2, 3);	// below
+	compare_adjacent_pixels_with_alpha_check(2, 2, 3, 2);	// right
+	// pixel (3, 2)
+	compare_adjacent_pixels_with_alpha_check(3, 2, 3, 3);	// below
+	// pixel (1, 3)
+	compare_adjacent_pixels_with_alpha_check(1, 3, 0, 3);	// left
+	compare_adjacent_pixels_with_alpha_check(1, 3, 2, 3);	// right
+	// pixel (2, 3)
+	compare_adjacent_pixels_with_alpha_check(2, 3, 3, 3);	// right
+
+	// Add errors based on differences between adjacent pixels for top row pixels, comparing with the
+	// block above.
+	if (user_data->texture_pixels_above != NULL) {
+		int red_diff_above, green_diff_above, blue_diff_above, alpha_diff_above;
+		unsigned int *pix1_above = user_data->texture_pixels_above;
+		get_component_differences_with_alpha_above_x(0);
+		compare_adjacent_pixels_with_alpha_block_above(0, 0, 0, 3);
+		if (w > 1) {
+			get_component_differences_with_alpha_above_x(1);
+			compare_adjacent_pixels_with_alpha_block_above(1, 0, 1, 3);
+			if (w > 2) {
+				get_component_differences_with_alpha_above_x(2);
+				compare_adjacent_pixels_with_alpha_block_above(2, 0, 2, 3);
+				if (w > 3) {
+					get_component_differences_with_alpha_above_x(3);
+					compare_adjacent_pixels_with_alpha_block_above(3, 0, 3, 3);
+				}
+			}
+		}
+	}
+	// Add errors based on differences between adjacent pixels for left column pixels, comparing with the
+	// block to the left.
+	if (user_data->texture_pixels_left != NULL) {
+		int red_diff_left, green_diff_left, blue_diff_left, alpha_diff_left;
+		unsigned int *pix1_left = user_data->texture_pixels_left;
+		get_component_differences_with_alpha_left_y(0);
+		compare_adjacent_pixels_with_alpha_block_left(0, 0, 3, 0);
+		if (h > 1) {
+			get_component_differences_with_alpha_left_y(1);
+			compare_adjacent_pixels_with_alpha_block_left(0, 1, 3, 1);
+			if (h > 2) {
+				get_component_differences_with_alpha_left_y(2);
+				compare_adjacent_pixels_with_alpha_block_left(0, 2, 3, 2);
+				if (h > 3) {
+					get_component_differences_with_alpha_left_y(3);
+					compare_adjacent_pixels_with_alpha_block_left(0, 3, 3, 3);
+				}
+			}
+		}
+	}
+	return (double)1 / error;
+}
 
 float *normalized_float_table = NULL;
 

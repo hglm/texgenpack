@@ -372,6 +372,7 @@ void set_texture_decoding_function(Texture *texture, Image *image) {
 	case TEXTURE_TYPE_DXT1A :
 	case TEXTURE_TYPE_BPTC :
 		comparison_func = compare_block_4x4_rgba;
+		perceptive_comparison_func = compare_block_perceptive_4x4_rgba;
 		break;
 	case TEXTURE_TYPE_UNCOMPRESSED_RG8 :
 	case TEXTURE_TYPE_UNCOMPRESSED_R8 :
