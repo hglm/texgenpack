@@ -51,7 +51,7 @@ int option_orientation = 0;
 int option_texture_format = - 1;
 int option_compression_level = SPEED_FAST;
 int option_progress = 0;
-int option_modal_etc2 = 0;
+int option_modal_etc2 = 1;
 int option_allowed_modes_etc2 = - 1;
 int option_mipmaps = 0;
 int option_generations = - 1;
@@ -81,7 +81,7 @@ static char *instructions1 =
 static const char *commands[NU_COMMANDS] = {
 	"--compress", "--decompress", "--compare", "--calibrate" };
 
-#define NU_OPTIONS 23
+#define NU_OPTIONS 24
 
 enum {
 	OPTION_COMPRESSION_LEVEL = 0,
@@ -107,6 +107,7 @@ enum {
 	OPTION_VERBOSE,
 	OPTION_VERY_VERBOSE,
 	OPTION_QUIET,
+	OPTION_VERBOSITY,
 };
 
 static const char *options[NU_OPTIONS] = {
@@ -118,18 +119,19 @@ static const char *options[NU_OPTIONS] = {
 	"--orientation", "--flip-vertical",
 	"--modal", "--allowed-modes",
 	"--maxthreads", "--generations", "--islands", "--generations-second-pass", "--islands-second-pass",
-	"--progress", "--verbose", "--very-verbose", "--quiet",
+	"--progress", "--verbose", "--very-verbose", "--quiet", "--verbosity"
 };
 
 static const char *option_argument[NU_OPTIONS] = {
 	"<number>", "", "", "", "",
+	"",
 	"<format>",
 	"", "",
 	"",
 	"<direction>", "",
 	"", "<modes>",
-	"<number>", "<number>", "<number>",
-	"", "", "", "",
+	"<number>", "<number>", "<number>", "<number>", "<number>",
+	"", "", "", "", "<number>",
 };
 
 static const char *option_description[NU_OPTIONS] = {
@@ -159,6 +161,7 @@ static const char *option_description[NU_OPTIONS] = {
 	"Be verbose (information for each block).",
 	"Be very verbose (more information for each block).",
 	"Don't print anything.",
+	"Set verbosity level (0 to 3), 0 = quiet, 1 = verbose, 2 = very verbose.",
 };
 
 int main(int argc, char **argv) {
@@ -373,6 +376,15 @@ int main(int argc, char **argv) {
 				exit(1);
 			}
 			option_compression_level = value;
+			i += 2;
+			break;
+		case OPTION_VERBOSITY :
+			value = atoi(argv[i + 1]);
+			if (value < 0 || value > 3) {
+				printf("Error -- invalid verbosity (range 0-3).\n");
+				exit(1);
+			}
+			option_verbose = value;
 			i += 2;
 			break;
 #if 0

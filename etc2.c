@@ -533,7 +533,21 @@ int draw_block4x4_etc2_rgb8(const unsigned char *bitstring, unsigned int *image_
 #endif
 }
 
-// Only determine the mode of the ETC2 RGB8 block.
+// Determine the mode of the ETC1 RGB8 block.
+// Return one of the following values:
+// 0	Individual mode
+// 1	Differential mode
+
+int block4x4_etc1_rgb8_get_mode(const unsigned char *bitstring) {
+	// Figure out the mode.
+	if ((bitstring[3] & 2) == 0)
+		// Individual mode.
+		return 0;
+	else
+		return 1;
+}
+
+// Determine the mode of the ETC2 RGB8 block.
 // Return one of the following values:
 // 0	Individual mode
 // 1	Differential mode

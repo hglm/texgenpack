@@ -474,6 +474,15 @@ static char mode_has_partition_bits[8] = { 1, 1, 1, 1, 0, 0, 0, 1 };
 
 static int draw_bptc_mode_1(Block *block, unsigned int *image_buffer);
 
+int block4x4_bptc_get_mode(const unsigned char *bitstring) {
+	Block block;
+	block.data0 = *(uint64_t *)&bitstring[0];
+	block.data1 = *(uint64_t *)&bitstring[8];
+	block.index = 0;
+	uint32_t mode = extract_mode(&block);
+	return mode;
+}
+
 // Draw a 4x4 pixel block using the BPTC/BC7 texture compression data in bitstring.
 
 int draw_block4x4_bptc(const unsigned char *bitstring, unsigned int *image_buffer, int flags) {

@@ -20,6 +20,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdbool.h>
 #include <math.h>
 #include <malloc.h>
 #include <fgen.h>
@@ -307,9 +308,11 @@ int genetic_parameters, float mutation_prob, float crossover_prob) {
 
 	if (option_verbose) {
 		int nu_modes = 0;
-		if (texture->type == TEXTURE_TYPE_ETC2_RGB8 || texture->type == TEXTURE_TYPE_ETC2_EAC)
+		if (texture->type == TEXTURE_TYPE_ETC1)
+			nu_modes = 2;
+		else if (texture->type == TEXTURE_TYPE_ETC2_RGB8 || texture->type == TEXTURE_TYPE_ETC2_EAC)
 			nu_modes = 5;
-		if (texture->type == TEXTURE_TYPE_BPTC_FLOAT || texture->type == TEXTURE_TYPE_BPTC_SIGNED_FLOAT)
+		else if (texture->type == TEXTURE_TYPE_BPTC_FLOAT || texture->type == TEXTURE_TYPE_BPTC_SIGNED_FLOAT)
 			nu_modes = 14;
 		if (nu_modes > 0) {
 			printf("Mode statistics:\n");
@@ -647,7 +650,7 @@ static char *etc2_modestr = "IDTHP";
 
 // Report the given GA solution and store its bitstring in the texture, printing information if required.
 
-static void report_solution(FgenIndividual *best, BlockUserData *user_data, int nu_gens) {
+static void report_solution(FgenIndividual *best, BlockUserData *user_data, int nu_gens, bool compress_callback) {
 	Texture *texture = user_data->texture;
 	int x_offset = user_data->x_offset;
 	int y_offset = user_data->y_offset;
@@ -673,16 +676,25 @@ static void report_solution(FgenIndividual *best, BlockUserData *user_data, int 
 	if (option_verbose) {
 		printf("Block %d: ", (y_offset / texture->block_height) * (texture->extended_width / texture->block_width)
 			+ (x_offset / texture->block_width));
+		if (texture->type == TEXTURE_TYPE_ETC1) {
+			int mode = block4x4_etc1_rgb8_get_mode(best->bitstring);
+			printf("Mode: %c ", etc2_modestr[mode]);
+			if (compress_callback)
+				mode_statistics[mode]++;
+		}
+		else
 		if (texture->type == TEXTURE_TYPE_ETC2_RGB8 || texture->type == TEXTURE_TYPE_ETC2_EAC) {
 			int mode = block4x4_etc2_rgb8_get_mode(best->bitstring);
 			printf("Mode: %c ", etc2_modestr[mode]);
-			mode_statistics[mode]++;
+			if (compress_callback)
+				mode_statistics[mode]++;
 		}
 		else
 		if (texture->type == TEXTURE_TYPE_BPTC_FLOAT || texture->type == TEXTURE_TYPE_BPTC_SIGNED_FLOAT) {
 			int mode = block4x4_bptc_float_get_mode(best->bitstring);
 			printf("Mode: %d ", mode);
-			mode_statistics[mode]++;
+			if (compress_callback)
+				mode_statistics[mode]++;
 		}
 		printf("Combined: ");
 		printf("RMSE per pixel: %lf, ", sqrt((1.0 / best->fitness) / 16));
@@ -699,7 +711,8 @@ static void report_solution(FgenIndividual *best, BlockUserData *user_data, int 
 			printf("%d%% ", new_percentage);
 		fflush(stdout);
 	}
-	compress_callback_func(user_data);
+	if (compress_callback)
+		compress_callback_func(user_data);
 }
 
 // Compress each block with a single GA population. Unused.
@@ -742,7 +755,7 @@ static void compress_with_single_population(Image *image, Texture *texture) {
 //				fgen_run_threaded(pop, nu_generations);
 //			else
 				fgen_run(pop, nu_generations);
-			report_solution(fgen_best_individual_of_population(pop), user_data, pop->generation);
+			report_solution(fgen_best_individual_of_population(pop), user_data, pop->generation, true);
 			if (user_data->stop_signalled)
 				goto end;
 		}
@@ -808,42 +821,48 @@ static void compress_with_archipelago(Image *image, Texture *texture) {
 		fgen_set_migration_probability(pops[i], 0.05);
 		pops[i]->user_data = (BlockUserData *)malloc(sizeof(BlockUserData));
 		set_user_data((BlockUserData *)pops[i]->user_data, image, texture, 1);
-		if (texture->type == TEXTURE_TYPE_ETC2_RGB8) {
-			if (option_allowed_modes_etc2 !=  - 1)
-				((BlockUserData *)pops[i]->user_data)->flags = option_allowed_modes_etc2 |
-					ENCODE_BIT;
+		if ((texture->type == TEXTURE_TYPE_ETC2_RGB8 || texture->type == TEXTURE_TYPE_ETC1) &&
+		option_allowed_modes_etc2 !=  - 1)
+			((BlockUserData *)pops[i]->user_data)->flags = option_allowed_modes_etc2 |
+				ENCODE_BIT;
+		else if (texture->type == TEXTURE_TYPE_ETC1 && option_modal_etc2 && nu_islands >= 2) {
+			if ((i & 1) == 0)
+				((BlockUserData *)pops[i]->user_data)->flags =
+					ETC_MODE_ALLOWED_INDIVIDUAL | ENCODE_BIT;
 			else
-			if (option_modal_etc2 && nu_islands >= 8) {
-				switch (i & 7) {
-				case 0 :
-				case 1 :
-				case 2 :
-					((BlockUserData *)pops[i]->user_data)->flags =
-						ETC_MODE_ALLOWED_INDIVIDUAL | ENCODE_BIT;
-					break;
-				case 3 :
-				case 4 :
-					((BlockUserData *)pops[i]->user_data)->flags =
-						ETC_MODE_ALLOWED_DIFFERENTIAL | ENCODE_BIT;
-					break;
-				case 5 :
-					((BlockUserData *)pops[i]->user_data)->flags =
-						ETC2_MODE_ALLOWED_T | ENCODE_BIT;
-					break;
-				case 6 :
-					((BlockUserData *)pops[i]->user_data)->flags =
-						ETC2_MODE_ALLOWED_H | ENCODE_BIT;
-					break;
-				case 7 :
-					((BlockUserData *)pops[i]->user_data)->flags =
-						ETC2_MODE_ALLOWED_PLANAR | ENCODE_BIT;
-					break;
-				}
+				((BlockUserData *)pops[i]->user_data)->flags =
+					ETC_MODE_ALLOWED_DIFFERENTIAL | ENCODE_BIT;
+		}
+		else if (texture->type == TEXTURE_TYPE_ETC2_RGB8 && option_modal_etc2 && nu_islands >= 8) {
+			switch (i & 7) {
+			case 0 :
+			case 1 :
+				((BlockUserData *)pops[i]->user_data)->flags =
+					ETC_MODE_ALLOWED_INDIVIDUAL | ENCODE_BIT;
+				break;
+			case 2 :
+			case 3 :
+				((BlockUserData *)pops[i]->user_data)->flags =
+					ETC_MODE_ALLOWED_DIFFERENTIAL | ENCODE_BIT;
+				break;
+			case 4 :
+				((BlockUserData *)pops[i]->user_data)->flags =
+					ETC2_MODE_ALLOWED_T | ENCODE_BIT;
+				break;
+			case 5 :
+				((BlockUserData *)pops[i]->user_data)->flags =
+					ETC2_MODE_ALLOWED_H | ENCODE_BIT;
+				break;
+			case 6 :
+			case 7 :
+				((BlockUserData *)pops[i]->user_data)->flags =
+					ETC2_MODE_ALLOWED_PLANAR | ENCODE_BIT;
+				break;
 			}
 		}
 		// For the BPTC_FLOAT texture format, distribute different modes over the available islands.
 		if (texture->type == TEXTURE_TYPE_BPTC_FLOAT || texture->type == TEXTURE_TYPE_BPTC_SIGNED_FLOAT) {
-			if (/* option_modal_etc2 && */ nu_islands >= 8) {
+			if (nu_islands >= 8) {
 				switch (i & 7) {
 				case 0 :
 				case 1 :	// Mode 0 (very common).
@@ -978,7 +997,13 @@ static void compress_with_archipelago(Image *image, Texture *texture) {
 			}
 			// Report the best solution.
 			FgenIndividual *best = fgen_best_individual_of_archipelago(nu_islands, pops);
-			report_solution(best, (BlockUserData *)pops[0]->user_data, pops[0]->generation);
+			bool compress_callback;
+			if (isinf(best->fitness))
+				compress_callback = true;
+			else
+				compress_callback = false;
+			report_solution(best, (BlockUserData *)pops[0]->user_data, pops[0]->generation,
+				compress_callback);
 			if (option_verbose == 2)
 				for (int i = 0; i < nu_islands; i++) {
 					printf("Block %d: ", (y / texture->block_height) * (texture->extended_width /
@@ -1000,7 +1025,7 @@ static void compress_with_archipelago(Image *image, Texture *texture) {
 					FgenIndividual *best = fgen_best_individual_of_population(pops[i]);
 					double rmse = sqrt((1.0 / best->fitness) / 16);
 					printf(" RMSE per pixel: %lf\n", rmse);
-					if (rmse >= 1.0) {
+					if (option_verbose >= 3 && rmse >= 1.0) {
 						for (int j = 0; j < pops[i]->size; j++) {
 							FgenIndividual *ind = pops[i]->ind[j];
 							printf("  Individual %d: RMSE per pixel: %lf\n", j,
@@ -1010,15 +1035,33 @@ static void compress_with_archipelago(Image *image, Texture *texture) {
 				}
 			if (!isinf(best->fitness)) {
 				// Copy block user_data from first pass.
-				for (int i = 0; i < nu_islands_second_pass; i++)
+				for (int i = 0; i < nu_islands_second_pass; i++) {
 					*(BlockUserData *)pops2[i]->user_data = *(BlockUserData *)pops[0]->user_data;
+					// For ETC1, ETC2 and BPTC_FLOAT, preserve the mode of the compressed
+					// block during the second pass.
+					if (texture->type == TEXTURE_TYPE_ETC2_RGB8 ||
+					texture->type == TEXTURE_TYPE_ETC1 ||
+					texture->type == TEXTURE_TYPE_BPTC_FLOAT ||
+					texture->type == TEXTURE_TYPE_BPTC_SIGNED_FLOAT) {
+						int mode;
+						if (texture->type == TEXTURE_TYPE_ETC1)
+							mode = block4x4_etc1_rgb8_get_mode(best->bitstring);
+						else if (texture->type == TEXTURE_TYPE_ETC2_RGB8)
+							mode = block4x4_etc2_rgb8_get_mode(best->bitstring);
+						else
+							mode = block4x4_bptc_float_get_mode(best->bitstring);
+						((BlockUserData *)pops2[i]->user_data)->flags = (1 << mode) |
+							 ENCODE_BIT;
+					}
+				}
 				// Run the second pass.
 				if (option_max_threads != -1 && option_max_threads < nu_islands_second_pass)
 					fgen_run_archipelago(nu_islands_second_pass, pops2, - 1);
 				else
 					fgen_run_archipelago_threaded(nu_islands_second_pass, pops2, - 1);
 				best = fgen_best_individual_of_archipelago(nu_islands_second_pass, pops2);
-				report_solution(best, (BlockUserData *)pops2[0]->user_data, pops2[0]->generation);
+				report_solution(best, (BlockUserData *)pops2[0]->user_data, pops2[0]->generation,
+					true);
 			}
 			if (((BlockUserData *)pops[0]->user_data)->stop_signalled)
 				goto end;
@@ -1115,7 +1158,7 @@ static void compress_multiple_blocks_concurrently(Image *image, Texture *texture
 			}
 			for (int i = 0; i < nu_islands; i++) {
 				FgenIndividual *best = fgen_best_individual_of_population(pops[i]);
-				report_solution(best, (BlockUserData *)pops[i]->user_data, pops[i]->generation);
+				report_solution(best, (BlockUserData *)pops[i]->user_data, pops[i]->generation, true);
 				if (((BlockUserData *)pops[i]->user_data)->stop_signalled)
 					goto end;
 			}
@@ -1144,7 +1187,7 @@ static void compress_multiple_blocks_concurrently(Image *image, Texture *texture
 		}
 		for (int i = 0; i < nu_blocks_left; i++) {
 			FgenIndividual *best = fgen_best_individual_of_population(pops[i]);
-			report_solution(best, (BlockUserData *)pops[i]->user_data, pops[i]->generation);
+			report_solution(best, (BlockUserData *)pops[i]->user_data, pops[i]->generation, true);
 			if (((BlockUserData *)pops[i]->user_data)->stop_signalled)
 				goto end;
 		}
@@ -1231,7 +1274,7 @@ static void compress_multiple_blocks_concurrently_second_pass(Image *image, Text
 			}
 			for (int i = 0; i < nu_islands_second_pass; i++) {
 				FgenIndividual *best = fgen_best_individual_of_population(pops[i]);
-				report_solution(best, (BlockUserData *)pops[i]->user_data, pops[i]->generation);
+				report_solution(best, (BlockUserData *)pops[i]->user_data, pops[i]->generation, true);
 				if (((BlockUserData *)pops[i]->user_data)->stop_signalled)
 					goto end;
 			}
@@ -1260,7 +1303,7 @@ static void compress_multiple_blocks_concurrently_second_pass(Image *image, Text
 		}
 		for (int i = 0; i < nu_blocks_left; i++) {
 			FgenIndividual *best = fgen_best_individual_of_population(pops[i]);
-			report_solution(best, (BlockUserData *)pops[i]->user_data, pops[i]->generation);
+			report_solution(best, (BlockUserData *)pops[i]->user_data, pops[i]->generation, true);
 			if (((BlockUserData *)pops[i]->user_data)->stop_signalled)
 				goto end;
 		}

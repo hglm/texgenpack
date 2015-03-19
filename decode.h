@@ -40,6 +40,8 @@ int draw_block4x4_r11_eac(const unsigned char *bitstring, unsigned int *image_bu
 int draw_block4x4_rg11_eac(const unsigned char *bitstring, unsigned int *image_buffer, int flags);
 int draw_block4x4_signed_r11_eac(const unsigned char *bitstring, unsigned int *image_buffer, int flags);
 int draw_block4x4_signed_rg11_eac(const unsigned char *bitstring, unsigned int *image_buffer, int flags);
+// Return ETC1 mode (0 or 1).
+int block4x4_etc1_rgb8_get_mode(const unsigned char *bitstring);
 // Return ETC2 mode number from 0 to 4.
 int block4x4_etc2_rgb8_get_mode(const unsigned char *bitstring);
 // "Manual" optimization function.
@@ -66,6 +68,7 @@ int get_astc_block_size_height(int astc_block_type);
 // Functions defined in bptc.c
 
 int draw_block4x4_bptc(const unsigned char *bitstring, unsigned int *image_buffer, int flags);
+int block4x4_bptc_get_mode(const unsigned char *bitstring);
 int draw_block4x4_bptc_float(const unsigned char *bitstring, unsigned int *image_buffer, int flags);
 int draw_block4x4_bptc_signed_float(const unsigned char *bitstring, unsigned int *image_buffer, int flags);
 int block4x4_bptc_float_get_mode(const unsigned char *bitstring);
