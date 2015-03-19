@@ -989,7 +989,7 @@ static void compress_with_archipelago(Image *image, Texture *texture) {
 						if (modes_allowed & ETC_MODE_ALLOWED_INDIVIDUAL)
 							printf("I");
 						if (modes_allowed & ETC_MODE_ALLOWED_DIFFERENTIAL)
-						printf("D");
+							printf("D");
 						if (modes_allowed & ETC2_MODE_ALLOWED_T)
 							printf("T");
 						if (modes_allowed & ETC2_MODE_ALLOWED_H)
@@ -1008,16 +1008,18 @@ static void compress_with_archipelago(Image *image, Texture *texture) {
 						}
 					}
 				}
-			// Copy block user_data from first pass.
-			for (int i = 0; i < nu_islands_second_pass; i++)
-				*(BlockUserData *)pops2[i]->user_data = *(BlockUserData *)pops[0]->user_data;
-			// Run the second pass.
-			if (option_max_threads != -1 && option_max_threads < nu_islands_second_pass)
-				fgen_run_archipelago(nu_islands_second_pass, pops2, - 1);
-			else
-				fgen_run_archipelago_threaded(nu_islands_second_pass, pops2, - 1);
-			best = fgen_best_individual_of_archipelago(nu_islands_second_pass, pops2);
-			report_solution(best, (BlockUserData *)pops2[0]->user_data, pops2[0]->generation);
+			if (!isinf(best->fitness)) {
+				// Copy block user_data from first pass.
+				for (int i = 0; i < nu_islands_second_pass; i++)
+					*(BlockUserData *)pops2[i]->user_data = *(BlockUserData *)pops[0]->user_data;
+				// Run the second pass.
+				if (option_max_threads != -1 && option_max_threads < nu_islands_second_pass)
+					fgen_run_archipelago(nu_islands_second_pass, pops2, - 1);
+				else
+					fgen_run_archipelago_threaded(nu_islands_second_pass, pops2, - 1);
+				best = fgen_best_individual_of_archipelago(nu_islands_second_pass, pops2);
+				report_solution(best, (BlockUserData *)pops2[0]->user_data, pops2[0]->generation);
+			}
 			if (((BlockUserData *)pops[0]->user_data)->stop_signalled)
 				goto end;
 		}
