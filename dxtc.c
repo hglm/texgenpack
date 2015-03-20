@@ -18,6 +18,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include "texgenpack.h"
 #include "decode.h"
 #include "packing.h"
@@ -70,6 +71,11 @@ int draw_block4x4_dxt1a(const unsigned char *bitstring, unsigned int *image_buff
 	unsigned int colors = ((unsigned int)bitstring[0] << 24) | ((unsigned int)bitstring[1] << 16) |
 		((unsigned int)bitstring[2] << 8) | bitstring[3];
 #endif
+	bool opaque = ((colors & 0xFFFF) > ((colors & 0xFFFF0000) >> 16));
+	if (opaque && (flags & MODES_ALLOWED_NON_OPAQUE_ONLY))
+		return 0;
+	if (!opaque && (flags & MODES_ALLOWED_OPAQUE_ONLY))
+		return 0;
 	// Decode the two 5-6-5 RGB colors.
 	int color_r[4], color_g[4], color_b[4], color_a[4];
 	color_b[0] = (colors & 0x0000001F) << 3;
@@ -79,7 +85,7 @@ int draw_block4x4_dxt1a(const unsigned char *bitstring, unsigned int *image_buff
 	color_g[1] = (colors & 0x07E00000) >> (21 - 2);
 	color_r[1] = (colors & 0xF8000000) >> (27 - 3);
 	color_a[0] = color_a[1] = color_a[2] = color_a[3] = 0xFF;
-	if ((colors & 0xFFFF) > ((colors & 0xFFFF0000) >> 16)) {
+	if (opaque) {
 		color_r[2] = (2 * color_r[0] + color_r[1]) / 3;
 		color_g[2] = (2 * color_g[0] + color_g[1]) / 3;
 		color_b[2] = (2 * color_b[0] + color_b[1]) / 3;
@@ -139,6 +145,10 @@ int draw_block4x4_dxt3(const unsigned char *bitstring, unsigned int *image_buffe
 // Draw a 4x4 pixel block using the DXT5 texture compression data in bitstring.
 
 int draw_block4x4_dxt5(const unsigned char *bitstring, unsigned int *image_buffer, int flags) {
+	int alpha0 = bitstring[0];
+	int alpha1 = bitstring[1];
+	if (alpha0 > alpha1 && (flags & MODES_ALLOWED_OPAQUE_ONLY))
+		return 0;
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__ || !defined(__BYTE_ORDER__)
 	unsigned int colors = *(unsigned int *)&bitstring[8];
 #else
@@ -162,8 +172,6 @@ int draw_block4x4_dxt5(const unsigned char *bitstring, unsigned int *image_buffe
 	color_g[3] = (color_g[0] + 2 * color_g[1]) / 3;
 	color_b[3] = (color_b[0] + 2 * color_b[1]) / 3;
 	unsigned int pixels = *(unsigned int *)&bitstring[12];
-	int alpha0 = bitstring[0];
-	int alpha1 = bitstring[1];
 	uint64_t alpha_bits = (unsigned int)bitstring[2] | ((unsigned int)bitstring[3] << 8) |
 		((uint64_t)*(unsigned int *)&bitstring[4] << 16);
 	for (int i = 0; i < 16; i++) {

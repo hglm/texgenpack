@@ -367,8 +367,13 @@ static void compress_callback(BlockUserData *user_data) {
 	uint32_t image_buffer[16];
 	int compressed_block_index = (y / texture->block_height) * (texture->extended_width / texture->block_width)
 		+ x / texture->block_width;
+	int flags = 0;
+	if (texture->type == TEXTURE_TYPE_BPTC)
+		flags = BPTC_MODE_ALLOWED_ALL;
+	else if (texture->type & TEXTURE_TYPE_ETC_BIT)
+		flags = ETC2_MODE_ALLOWED_ALL;
 	texture->decoding_function((unsigned char *)&texture->pixels[compressed_block_index *
-		(texture->info->internal_bits_per_block / 32)], image_buffer, ETC2_MODE_ALLOWED_ALL);
+		(texture->info->internal_bits_per_block / 32)], image_buffer, flags);
 	// Copy it to image[1].
 	int h = 4;
 	if (y + h > current_image[1][mipmap_level_being_compressed].height)
@@ -538,6 +543,12 @@ static void menu_item_compress_activate_cb(GtkMenuItem *menu_item, gpointer data
 		if (current_image[0][i].bits_per_component == 16 && !(format & TEXTURE_TYPE_16_BIT_COMPONENTS_BIT)) {
 			current_image[1][i].bits_per_component = 8;
 		}
+		if (current_image[0][i].nu_components > info->nu_components)
+			// If the source image has more components (such as alpha) but the texture format does not,
+			// exclude the extra components from the target image.
+			current_image[1][i].nu_components = info->nu_components;
+		if (current_image[1][i].alpha_bits > 0 && (format & TEXTURE_TYPE_ALPHA_BIT) == 0)
+			current_image[1][i].alpha_bits = 0;
 		int bpp = 4;
 		if (current_image[1][i].is_half_float)
 			bpp = 8;

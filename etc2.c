@@ -941,6 +941,32 @@ void draw_block4x4_etc2_punchthrough_T_or_H_mode(const unsigned char *bitstring,
 	}
 }
 
+int block4x4_etc2_punchthrough_get_mode(const unsigned char *bitstring) {
+	// Figure out the mode.
+	int opaque = bitstring[3] & 2;
+	int R = (bitstring[0] & 0xF8);
+	R += complement3bitshifted(bitstring[0] & 7);
+	int G = (bitstring[1] & 0xF8);
+	G += complement3bitshifted(bitstring[1] & 7);
+	int B = (bitstring[2] & 0xF8);
+	B += complement3bitshifted(bitstring[2] & 7);
+	if (R & 0xFF07)
+		// T mode.
+		return 2;
+	else
+	if (G & 0xFF07)
+		// H mode.
+		return 3;
+	else
+	if (B & 0xFF07)
+		// Planar mode.
+		return 4;
+	else
+		// Differential mode.
+		return 1;
+}
+
+
 // Draw a 4x4 pixel block using 64-bit ETC2 PUNCHTHROUGH ALPHA compression data.
 
 int draw_block4x4_etc2_punchthrough(const unsigned char *bitstring, unsigned int *image_buffer, int flags) {
@@ -951,6 +977,10 @@ int draw_block4x4_etc2_punchthrough(const unsigned char *bitstring, unsigned int
 	int B = (bitstring[2] & 0xF8);
 	B += complement3bitshifted(bitstring[2] & 7);
 	int opaque = bitstring[3] & 2;
+	if (opaque && (flags & MODES_ALLOWED_NON_OPAQUE_ONLY))
+		return 0;
+	if (!opaque && (flags & MODES_ALLOWED_OPAQUE_ONLY))
+		return 0;
 	if (R & 0xFF07) {
 		// T mode.
 		if ((flags & ETC2_MODE_ALLOWED_T) == 0)

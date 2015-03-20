@@ -480,7 +480,9 @@ void convert_texture_to_image(Texture *texture, Image *image) {
 		if (option_allowed_modes_etc2 != - 1)
 			flags = option_allowed_modes_etc2;
 	}
-	if (texture->type == TEXTURE_TYPE_BPTC_FLOAT || texture->type == TEXTURE_TYPE_BPTC_SIGNED_FLOAT)
+	else if (texture->type == TEXTURE_TYPE_BPTC)
+		flags = BPTC_MODE_ALLOWED_ALL;
+	else if (texture->type == TEXTURE_TYPE_BPTC_FLOAT || texture->type == TEXTURE_TYPE_BPTC_SIGNED_FLOAT)
 		flags = BPTC_FLOAT_MODE_ALLOWED_ALL;
 	for (int y = 0; y < texture->extended_height; y += texture->block_height)
 		for (int x = 0; x < texture->extended_width; x += texture->block_width) {

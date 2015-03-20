@@ -28,11 +28,29 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "decode.h"
 #include "packing.h"
 
+enum {
+	// The RGB components of pixels in the block only have one color.
+	BLOCK_FLAG_ONE_COLOR = 0x1,
+	// The RGB components of pixels in the block only have two colors.
+	BLOCK_FLAG_TWO_COLORS = 0x2,
+	// The RGB components of pixels in the block only have three colors.
+	BLOCK_FLAG_THREE_COLORS = 0x4,
+	// The RGB components of pixels in the block only have four colors.
+	BLOCK_FLAG_FOUR_COLORS = 0x8,
+	// All alpha values of the block are 0xFF.
+	BLOCK_FLAG_OPAQUE = 0x10,
+	// None of the alpha values of the block are 0xFF.
+	BLOCK_FLAG_NON_OPAQUE = 0x20,
+	// The alpha values are either 0x00 or 0xFF
+	BLOCK_FLAG_PUNCHTHROUGH = 0x40,
+};
+
 static void compress_with_single_population(Image *image, Texture *Texture);
 static void compress_with_archipelago(Image *image, Texture *texture);
 static void compress_multiple_blocks_concurrently(Image *image, Texture *texture);
 static void compress_multiple_blocks_concurrently_second_pass(Image *image, Texture *texture);
 static void set_alpha_pixels(Image *image, int x, int y, int w, int h, unsigned char *alpha_pixels);
+static int get_block_flags_rgba8(Image *image, int x, int y, int w, int h, unsigned char *alpha_pixels);
 static void optimize_alpha(Image *image, Texture *texture);
 static double get_rmse_threshold(Texture *texture, int speed, Image *image);
 
@@ -212,7 +230,7 @@ int genetic_parameters, float mutation_prob, float crossover_prob) {
 				mutation_probability = 0.014;
 			else if (texture_type == TEXTURE_TYPE_BPTC)
 				// bptc
-				mutation_probability = 0.011;
+				mutation_probability = 0.012;
 			else if (texture_type == TEXTURE_TYPE_DXT5)
 				mutation_probability = 0.017;
 			else
@@ -310,8 +328,11 @@ int genetic_parameters, float mutation_prob, float crossover_prob) {
 		int nu_modes = 0;
 		if (texture->type == TEXTURE_TYPE_ETC1)
 			nu_modes = 2;
-		else if (texture->type == TEXTURE_TYPE_ETC2_RGB8 || texture->type == TEXTURE_TYPE_ETC2_EAC)
+		else if (texture->type == TEXTURE_TYPE_ETC2_RGB8 || texture->type == TEXTURE_TYPE_ETC2_EAC ||
+		texture->type == TEXTURE_TYPE_ETC2_PUNCHTHROUGH)
 			nu_modes = 5;
+		else if (texture->type == TEXTURE_TYPE_BPTC)
+			nu_modes = 8;
 		else if (texture->type == TEXTURE_TYPE_BPTC_FLOAT || texture->type == TEXTURE_TYPE_BPTC_SIGNED_FLOAT)
 			nu_modes = 14;
 		if (nu_modes > 0) {
@@ -630,11 +651,13 @@ static void set_user_data(BlockUserData *user_data, Image *image, Texture *textu
 	user_data->flags = ENCODE_BIT;
 	if (texture->type == TEXTURE_TYPE_ETC1)
 		user_data->flags |= ETC_MODE_ALLOWED_ALL;
-	else
-	if (texture->type == TEXTURE_TYPE_ETC2_RGB8 || texture->type == TEXTURE_TYPE_ETC2_EAC)
+	else if (texture->type == TEXTURE_TYPE_ETC2_RGB8 || texture->type == TEXTURE_TYPE_ETC2_EAC)
 		user_data->flags |= ETC2_MODE_ALLOWED_ALL;
-	else
-	if (texture->type == TEXTURE_TYPE_BPTC_FLOAT || texture->type == TEXTURE_TYPE_BPTC_SIGNED_FLOAT)
+	else if (texture->type == TEXTURE_TYPE_ETC2_PUNCHTHROUGH)
+		user_data->flags |= ETC2_PUNCHTHROUGH_MODE_ALLOWED_ALL;
+	else if (texture->type == TEXTURE_TYPE_BPTC)
+		user_data->flags |= BPTC_MODE_ALLOWED_ALL;
+	else if (texture->type == TEXTURE_TYPE_BPTC_FLOAT || texture->type == TEXTURE_TYPE_BPTC_SIGNED_FLOAT)
 		user_data->flags |= BPTC_FLOAT_MODE_ALLOWED_ALL;
 	user_data->image_pixels = image->pixels;
 	if (image->is_half_float)
@@ -686,6 +709,20 @@ static void report_solution(FgenIndividual *best, BlockUserData *user_data, int 
 		if (texture->type == TEXTURE_TYPE_ETC2_RGB8 || texture->type == TEXTURE_TYPE_ETC2_EAC) {
 			int mode = block4x4_etc2_rgb8_get_mode(best->bitstring);
 			printf("Mode: %c ", etc2_modestr[mode]);
+			if (compress_callback)
+				mode_statistics[mode]++;
+		}
+		else
+		if (texture->type == TEXTURE_TYPE_ETC2_PUNCHTHROUGH) {
+			int mode = block4x4_etc2_punchthrough_get_mode(best->bitstring);
+			printf("Mode: %c ", etc2_modestr[mode]);
+			if (compress_callback)
+				mode_statistics[mode]++;
+		}
+		else
+		if (texture->type == TEXTURE_TYPE_BPTC) {
+			int mode = block4x4_bptc_get_mode(best->bitstring);
+			printf("Mode: %d ", mode);
 			if (compress_callback)
 				mode_statistics[mode]++;
 		}
@@ -821,8 +858,7 @@ static void compress_with_archipelago(Image *image, Texture *texture) {
 		fgen_set_migration_probability(pops[i], 0.05);
 		pops[i]->user_data = (BlockUserData *)malloc(sizeof(BlockUserData));
 		set_user_data((BlockUserData *)pops[i]->user_data, image, texture, 1);
-		if ((texture->type == TEXTURE_TYPE_ETC2_RGB8 || texture->type == TEXTURE_TYPE_ETC1) &&
-		option_allowed_modes_etc2 !=  - 1)
+		if ((texture->type & TEXTURE_TYPE_ETC_BIT) && option_allowed_modes_etc2 !=  - 1)
 			((BlockUserData *)pops[i]->user_data)->flags = option_allowed_modes_etc2 |
 				ENCODE_BIT;
 		else if (texture->type == TEXTURE_TYPE_ETC1 && option_modal_etc2 && nu_islands >= 2) {
@@ -833,22 +869,48 @@ static void compress_with_archipelago(Image *image, Texture *texture) {
 				((BlockUserData *)pops[i]->user_data)->flags =
 					ETC_MODE_ALLOWED_DIFFERENTIAL | ENCODE_BIT;
 		}
-		else if (texture->type == TEXTURE_TYPE_ETC2_RGB8 && option_modal_etc2 && nu_islands >= 8) {
+		else if ((texture->type == TEXTURE_TYPE_ETC2_RGB8 || texture->type == TEXTURE_TYPE_ETC2_EAC)
+		&& option_modal_etc2 && nu_islands >= 8) {
 			switch (i & 7) {
 			case 0 :
 			case 1 :
 				((BlockUserData *)pops[i]->user_data)->flags =
-					ETC_MODE_ALLOWED_INDIVIDUAL | ENCODE_BIT;
+					ETC_MODE_ALLOWED_INDIVIDUAL;
 				break;
 			case 2 :
 			case 3 :
 				((BlockUserData *)pops[i]->user_data)->flags =
-					ETC_MODE_ALLOWED_DIFFERENTIAL | ENCODE_BIT;
+					ETC_MODE_ALLOWED_DIFFERENTIAL;
 				break;
 			case 4 :
 				((BlockUserData *)pops[i]->user_data)->flags =
+					ETC2_MODE_ALLOWED_T;
+				break;
+			case 5 :
+				((BlockUserData *)pops[i]->user_data)->flags =
+					ETC2_MODE_ALLOWED_H;
+				break;
+			case 6 :
+			case 7 :
+				((BlockUserData *)pops[i]->user_data)->flags =
+					ETC2_MODE_ALLOWED_PLANAR;
+				break;
+			}
+			((BlockUserData *)pops[i]->user_data)->flags |= ENCODE_BIT;
+		}
+		else if (texture->type == TEXTURE_TYPE_ETC2_PUNCHTHROUGH && option_modal_etc2 && nu_islands >= 8) {
+			switch (i & 7) {
+			case 0 :
+			case 1 :
+				((BlockUserData *)pops[i]->user_data)->flags =
+					ETC_MODE_ALLOWED_DIFFERENTIAL | ENCODE_BIT;
+				break;
+			case 2 :
+			case 3 :
+				((BlockUserData *)pops[i]->user_data)->flags =
 					ETC2_MODE_ALLOWED_T | ENCODE_BIT;
 				break;
+			case 4 :
 			case 5 :
 				((BlockUserData *)pops[i]->user_data)->flags =
 					ETC2_MODE_ALLOWED_H | ENCODE_BIT;
@@ -859,6 +921,12 @@ static void compress_with_archipelago(Image *image, Texture *texture) {
 					ETC2_MODE_ALLOWED_PLANAR | ENCODE_BIT;
 				break;
 			}
+		}
+		if (texture->type == TEXTURE_TYPE_ETC2_EAC || texture->type == TEXTURE_TYPE_ETC2_PUNCHTHROUGH) {
+			// Check whether block is opaque or non-opaque.
+			// Set ETC2_MODE_ALLOWED_OPAQUE_ONLY or ETC2_MODE_ALLOWED_NON_OPAQUE_ONLY for
+			// ETC2_PUNCHTHROUGH if appropriate.
+			// For ETC_RGB8_EAC, seed with appropriate alpha values.
 		}
 		// For the BPTC_FLOAT texture format, distribute different modes over the available islands.
 		if (texture->type == TEXTURE_TYPE_BPTC_FLOAT || texture->type == TEXTURE_TYPE_BPTC_SIGNED_FLOAT) {
@@ -941,11 +1009,19 @@ static void compress_with_archipelago(Image *image, Texture *texture) {
 
 	for (int y = 0; y < image->extended_height; y += texture->block_height)
 		for (int x = 0; x < image->extended_width; x+= texture->block_width) {
-			// For 1-bit alpha texture, prepare the alpha values of the image block for use in the
+			// Get block flags and prepare the alpha values of the image block for use in the
 			// seeding function.
-			if (texture->type == TEXTURE_TYPE_DXT3 || texture->type == TEXTURE_TYPE_ETC2_PUNCHTHROUGH)
-				set_alpha_pixels(image, x, y, texture->block_width, texture->block_height,
-					alpha_pixels);
+			int block_flags = 0;
+			if ((texture->type & (TEXTURE_TYPE_DXTC_BIT | TEXTURE_TYPE_ALPHA_BIT)) ==
+			(TEXTURE_TYPE_DXTC_BIT | TEXTURE_TYPE_ALPHA_BIT) || texture->type == TEXTURE_TYPE_ETC2_EAC ||
+			texture->type == TEXTURE_TYPE_ETC2_PUNCHTHROUGH || texture->type == TEXTURE_TYPE_BPTC) {
+//				set_alpha_pixels(image, x, y, texture->block_width, texture->block_height,
+					//alpha_pixels);
+				// Get early parameters for block (whether it is completely opaque or non-opaque,
+				// whether it uses only a limited amount of colors), and set alpha pixels.
+				block_flags = get_block_flags_rgba8(image, x, y, texture->block_width,
+					texture->block_height, alpha_pixels);
+			}
 			// Calculate pointers to decompressed pixel buffer for block, and block above and left.
 			unsigned int *texture_pixels_block, *texture_pixels_above, *texture_pixels_left;
 			if (option_perceptive) {
@@ -979,6 +1055,11 @@ static void compress_with_archipelago(Image *image, Texture *texture) {
 					user_data->texture_pixels_above = texture_pixels_above;
 					user_data->texture_pixels_left = texture_pixels_left;
 				}
+				user_data->flags &= ~(MODES_ALLOWED_OPAQUE_ONLY | MODES_ALLOWED_NON_OPAQUE_ONLY);
+				if (block_flags & BLOCK_FLAG_OPAQUE)
+					user_data->flags |= MODES_ALLOWED_OPAQUE_ONLY;
+				else if (block_flags & BLOCK_FLAG_NON_OPAQUE)
+					user_data->flags |= MODES_ALLOWED_NON_OPAQUE_ONLY;
 			}
 			// Run the genetic algorithm.
 			int nu_concurrent_islands = nu_islands;
@@ -1037,21 +1118,33 @@ static void compress_with_archipelago(Image *image, Texture *texture) {
 				// Copy block user_data from first pass.
 				for (int i = 0; i < nu_islands_second_pass; i++) {
 					*(BlockUserData *)pops2[i]->user_data = *(BlockUserData *)pops[0]->user_data;
-					// For ETC1, ETC2 and BPTC_FLOAT, preserve the mode of the compressed
+					// For ETC1, ETC2, BPTC and BPTC_FLOAT, preserve the mode of the compressed
 					// block during the second pass.
-					if (texture->type == TEXTURE_TYPE_ETC2_RGB8 ||
-					texture->type == TEXTURE_TYPE_ETC1 ||
+					if ((texture->type & TEXTURE_TYPE_ETC_BIT) ||
+					texture->type == TEXTURE_TYPE_BPTC ||
 					texture->type == TEXTURE_TYPE_BPTC_FLOAT ||
 					texture->type == TEXTURE_TYPE_BPTC_SIGNED_FLOAT) {
 						int mode;
 						if (texture->type == TEXTURE_TYPE_ETC1)
 							mode = block4x4_etc1_rgb8_get_mode(best->bitstring);
-						else if (texture->type == TEXTURE_TYPE_ETC2_RGB8)
-							mode = block4x4_etc2_rgb8_get_mode(best->bitstring);
+						else if (texture->type & TEXTURE_TYPE_ETC_BIT)
+							if (texture->type == TEXTURE_TYPE_ETC2_PUNCHTHROUGH)
+								mode = block4x4_etc2_punchthrough_get_mode(
+									best->bitstring);
+							else
+								mode = block4x4_etc2_rgb8_get_mode(best->bitstring);
+						else if (texture->type == TEXTURE_TYPE_BPTC)
+							mode = block4x4_bptc_get_mode(best->bitstring);
 						else
 							mode = block4x4_bptc_float_get_mode(best->bitstring);
 						((BlockUserData *)pops2[i]->user_data)->flags = (1 << mode) |
 							 ENCODE_BIT;
+						if (block_flags & BLOCK_FLAG_OPAQUE)
+							((BlockUserData *)pops2[i]->user_data)->flags |=
+								MODES_ALLOWED_OPAQUE_ONLY;
+						else if (block_flags & BLOCK_FLAG_NON_OPAQUE)
+							((BlockUserData *)pops2[i]->user_data)->flags |=
+								MODES_ALLOWED_NON_OPAQUE_ONLY;
 					}
 				}
 				// Run the second pass.
@@ -1135,7 +1228,8 @@ static void compress_multiple_blocks_concurrently(Image *image, Texture *texture
 				user_data->y_offset = y;
 				// For 1-bit alpha texture, prepare the alpha values of the image block for use in the
 				// seeding function.
-				if (texture->type == TEXTURE_TYPE_DXT3 || texture->type == TEXTURE_TYPE_ETC2_PUNCHTHROUGH) {
+				if (texture->type == TEXTURE_TYPE_DXT3 ||
+				texture->type == TEXTURE_TYPE_ETC2_PUNCHTHROUGH) {
 					set_alpha_pixels(image, x + i * texture->block_width, y, texture->block_width,
 						texture->block_height, &alpha_pixels[i * 16]);
 					user_data->alpha_pixels = &alpha_pixels[i * 16];
@@ -1254,7 +1348,8 @@ static void compress_multiple_blocks_concurrently_second_pass(Image *image, Text
 				user_data->y_offset = y;
 				// For 1-bit alpha texture, prepare the alpha values of the image block for use in the
 				// seeding function.
-				if (texture->type == TEXTURE_TYPE_DXT3 || texture->type == TEXTURE_TYPE_ETC2_PUNCHTHROUGH) {
+				if (texture->type == TEXTURE_TYPE_DXT3 ||
+				texture->type == TEXTURE_TYPE_ETC2_PUNCHTHROUGH) {
 					set_alpha_pixels(image, x + i * texture->block_width, y, texture->block_width,
 						texture->block_height, &alpha_pixels[i * 16]);
 					user_data->alpha_pixels = &alpha_pixels[i * 16];
@@ -1327,6 +1422,38 @@ static void set_alpha_pixels(Image *image, int x, int y, int w, int h, unsigned 
 				// If the pixel falls on the border, put 0xFF.
 				alpha_pixels[by * w + bx] = 0xFF;
 }
+
+// Determine block flags for RGBA8 block (whether it is completely opaque or non-opaque,
+// whether it uses only a limited amount of colors) and copy alpha pixel values into an array.
+
+static int get_block_flags_rgba8(Image *image, int x, int y, int w, int h, unsigned char *alpha_pixels) {
+	int block_flags = BLOCK_FLAG_OPAQUE | BLOCK_FLAG_NON_OPAQUE | BLOCK_FLAG_PUNCHTHROUGH;
+	for (int by = 0; by < h; by++)
+		for (int bx = 0; bx < w; bx++) {
+			int alpha;
+			if (y + by < image->height && x + bx < image->width) {
+				unsigned int pixel = image->pixels[(y + by) * image->extended_width + x + bx];
+				alpha = pixel_get_a(pixel);
+			}
+			else {
+				// If the pixel falls on the border, conform to the current findings.
+				if (block_flags & BLOCK_FLAG_OPAQUE)
+					alpha = 0xFF;
+				else
+					alpha = 0x00;
+			}
+			if (alpha == 0xFF)
+				block_flags &= (~BLOCK_FLAG_NON_OPAQUE);
+			else {
+				block_flags &= (~BLOCK_FLAG_OPAQUE);
+				if (alpha != 0x00)
+					block_flags &= (~BLOCK_FLAG_PUNCHTHROUGH);
+			}
+			alpha_pixels[by * w + bx] = alpha;
+		}
+	return block_flags;
+}
+
 
 // Optimize the alpha component of 1-bit alpha textures for the whole image.
 

@@ -19,15 +19,21 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 // Flags values for the decoding functions.
 
-#define ETC_MODE_ALLOWED_INDIVIDUAL	1
-#define ETC_MODE_ALLOWED_DIFFERENTIAL	2
-#define ETC2_MODE_ALLOWED_T		4
-#define ETC2_MODE_ALLOWED_H		8
-#define ETC2_MODE_ALLOWED_PLANAR	16
-#define ETC_MODE_ALLOWED_ALL		3
-#define ETC2_MODE_ALLOWED_ALL		31
-#define BPTC_FLOAT_MODE_ALLOWED_ALL	0x3FFF
-#define ENCODE_BIT			0x10000
+enum {
+	ETC_MODE_ALLOWED_INDIVIDUAL = 0x1,
+	ETC_MODE_ALLOWED_DIFFERENTIAL = 0x2,
+	ETC2_MODE_ALLOWED_T = 0x4,
+	ETC2_MODE_ALLOWED_H = 0x8,
+	ETC2_MODE_ALLOWED_PLANAR = 0x10,
+	ETC_MODE_ALLOWED_ALL = 0x3,
+	ETC2_MODE_ALLOWED_ALL = 0x1F,
+	ETC2_PUNCHTHROUGH_MODE_ALLOWED_ALL = 0x1E,
+	BPTC_MODE_ALLOWED_ALL = 0xFF,
+	MODES_ALLOWED_OPAQUE_ONLY = 0x100,
+	MODES_ALLOWED_NON_OPAQUE_ONLY = 0x200,
+	BPTC_FLOAT_MODE_ALLOWED_ALL = 0x3FFF,
+	ENCODE_BIT = 0x10000
+};
 
 // Functions defined in etc2.c.
 
@@ -44,6 +50,7 @@ int draw_block4x4_signed_rg11_eac(const unsigned char *bitstring, unsigned int *
 int block4x4_etc1_rgb8_get_mode(const unsigned char *bitstring);
 // Return ETC2 mode number from 0 to 4.
 int block4x4_etc2_rgb8_get_mode(const unsigned char *bitstring);
+int block4x4_etc2_punchthrough_get_mode(const unsigned char *bitstring);
 // "Manual" optimization function.
 void optimize_block_etc2_punchthrough(unsigned char *bitstring, unsigned char *alpha_values);
 

@@ -479,7 +479,7 @@ int block4x4_bptc_get_mode(const unsigned char *bitstring) {
 	block.data0 = *(uint64_t *)&bitstring[0];
 	block.data1 = *(uint64_t *)&bitstring[8];
 	block.index = 0;
-	uint32_t mode = extract_mode(&block);
+	int mode = extract_mode(&block);
 	return mode;
 }
 
@@ -492,6 +492,13 @@ int draw_block4x4_bptc(const unsigned char *bitstring, unsigned int *image_buffe
 	block.index = 0;
 	int mode = extract_mode(&block);
 	if (mode == - 1)
+		return 0;
+	// Allow compression tied to specific modes (according to flags).
+	if (!(flags & ((int)1 << mode)))
+		return 0;
+	if (mode >= 4 && (flags & MODES_ALLOWED_OPAQUE_ONLY))
+		return 0;
+	if (mode < 4 && (flags & MODES_ALLOWED_NON_OPAQUE_ONLY))
 		return 0;
 	if (mode == 1)
 		return draw_bptc_mode_1(&block, image_buffer);
