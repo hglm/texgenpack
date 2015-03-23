@@ -87,6 +87,7 @@ int block4x4_bptc_get_mode(const unsigned char *bitstring);
 int draw_block4x4_bptc_float(const unsigned char *bitstring, unsigned int *image_buffer, int flags);
 int draw_block4x4_bptc_signed_float(const unsigned char *bitstring, unsigned int *image_buffer, int flags);
 int block4x4_bptc_float_get_mode(const unsigned char *bitstring);
+void block4x4_bptc_set_mode(unsigned char *bitstring, int flags);
 
 // Functions defined in rgtc.c
 

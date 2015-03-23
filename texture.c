@@ -340,6 +340,7 @@ void set_texture_decoding_function(Texture *texture, Image *image) {
 	case TEXTURE_TYPE_BPTC :
 		decoding_func = draw_block4x4_bptc;
 		get_mode_func = block4x4_bptc_get_mode;
+		set_mode_func = block4x4_bptc_set_mode;
 		break;
 	case TEXTURE_TYPE_BPTC_FLOAT :
 		decoding_func = draw_block4x4_bptc_float;

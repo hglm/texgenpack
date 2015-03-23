@@ -488,7 +488,7 @@ again :
 	valid = user_data->texture->decoding_function(bitstring, image_buffer, user_data->flags);
 	nu_tries++;
 	if (nu_tries == 100)
-		printf("Giving up after 100 tries.\n");
+		printf("Giving up seeding with constraints after 100 tries.\n");
 	else if (!valid)
 		goto again;
 //	printf("Seed: %d tries.\n", nu_tries);
@@ -585,7 +585,7 @@ again :
 	valid = user_data->texture->decoding_function(bitstring, image_buffer, user_data->flags);
 	nu_tries++;
 	if (nu_tries == 100)
-		printf("Giving up after 100 tries.\n");
+		printf("Giving up seeding with constraints after 100 tries.\n");
 	else if (!valid)
 		goto again;
 //	printf("Seed: %d tries (flags = 0x%08X).\n", nu_tries, user_data->flags);
@@ -804,9 +804,21 @@ static void set_user_data_mode_flags(int i, BlockUserData *user_data, int block_
 			}
 		}
 		// For the BPTC texture format, distribute different modes over the available islands.
-		if (user_data->texture->type == TEXTURE_TYPE_BPTC) {
-			if (nu_islands >= 8)
-				user_data->flags = (1 << i) | ENCODE_BIT;
+		if (user_data->texture->type == TEXTURE_TYPE_BPTC && nu_islands >= 8) {
+			if (block_flags & BLOCK_FLAG_OPAQUE)
+				if (block_flags & BLOCK_FLAG_TWO_COLORS)
+					// Only use mode 3.
+					user_data->flags = (1 << 3) | ENCODE_BIT;
+				else
+					// Use modes 0 to 3 only.
+					user_data->flags = (1 << (i & 3)) | ENCODE_BIT;
+			else
+				if ((block_flags & BLOCK_FLAG_PUNCHTHROUGH) && (block_flags & BLOCK_FLAG_TWO_COLORS))
+					// Only use mode 5 and 6.
+					user_data->flags = (1 << (5 + (i & 1))) | ENCODE_BIT;
+				else
+					// Modes 4 to 7.
+					user_data->flags = (1 << (4 + (i & 3))) | ENCODE_BIT;
 		}
 		// For the BPTC_FLOAT texture format, distribute different modes over the available islands.
 		if (user_data->texture->type == TEXTURE_TYPE_BPTC_FLOAT ||
@@ -1489,7 +1501,12 @@ static void set_alpha_pixels(Image *image, int x, int y, int w, int h, unsigned 
 // whether it uses only a limited amount of colors) and copy alpha pixel values into an array.
 
 static int get_block_flags_rgba8(Image *image, int x, int y, int w, int h, unsigned char *alpha_pixels) {
-	int block_flags = BLOCK_FLAG_OPAQUE | BLOCK_FLAG_NON_OPAQUE | BLOCK_FLAG_PUNCHTHROUGH;
+	if (image->alpha_bits == 0)
+		return BLOCK_FLAG_OPAQUE | BLOCK_FLAG_PUNCHTHROUGH;
+	int block_flags = BLOCK_FLAG_OPAQUE | BLOCK_FLAG_NON_OPAQUE | BLOCK_FLAG_PUNCHTHROUGH |
+		BLOCK_FLAG_TWO_COLORS;
+	int color0 = - 1;
+	int color1 = - 1;
 	for (int by = 0; by < h; by++)
 		for (int bx = 0; bx < w; bx++) {
 			int alpha;
@@ -1512,6 +1529,17 @@ static int get_block_flags_rgba8(Image *image, int x, int y, int w, int h, unsig
 					block_flags &= (~BLOCK_FLAG_PUNCHTHROUGH);
 			}
 			alpha_pixels[by * w + bx] = alpha;
+			if (y + by < image->height && x + bx < image->width) {
+				unsigned int pixel = image->pixels[(y + by) * image->extended_width + x + bx];
+				int rgb = pixel_get_r(pixel) + (pixel_get_g(pixel) << 8) + (pixel_get_b(pixel) << 16);
+				if (color0 == - 1)
+					color0 = rgb;
+				else if (rgb != color0)
+					if (color1 == - 1)
+						color1 = rgb;
+					else if (rgb != color1)
+						block_flags &= (~BLOCK_FLAG_TWO_COLORS);
+			}
 		}
 	return block_flags;
 }

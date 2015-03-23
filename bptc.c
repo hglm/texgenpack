@@ -483,6 +483,23 @@ int block4x4_bptc_get_mode(const unsigned char *bitstring) {
 	return mode;
 }
 
+void block4x4_bptc_set_mode(unsigned char *bitstring, int flags) {
+	// Mode 0 starts with 1
+	// Mode 1 starts with 01
+	// ...
+	// Mode 7 starts with 00000001
+	int mode_flags = flags & BPTC_MODE_ALLOWED_ALL;
+	int bit = 0x1;
+	for (int i = 0; i < 8; i++) {
+		if (mode_flags == (1 << i)) {
+			bitstring[0] &= ~(bit - 1);
+			bitstring[0] |= bit;
+			return;
+		}
+		bit <<= 1;
+	}
+}
+
 // Draw a 4x4 pixel block using the BPTC/BC7 texture compression data in bitstring.
 
 int draw_block4x4_bptc(const unsigned char *bitstring, unsigned int *image_buffer, int flags) {
