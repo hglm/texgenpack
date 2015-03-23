@@ -18,6 +18,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -204,15 +205,27 @@ void calculate_difference_images(Image *source_image1, Image *source_image2, int
 		}
 		else
 			source2 = &source_image2[i];
+		bool have_alpha = source1->alpha_bits > 0 && source2->alpha_bits > 0;
 		for (int y = 0; y < h; y++)
 			for (int x = 0; x < w; x++) {
 				uint32_t pixel1 = source1->pixels[y * source1->extended_width + x];
 				uint32_t pixel2 = source2->pixels[y * source2->extended_width + x];
-				int difference = abs(pixel_get_r(pixel1) - pixel_get_r(pixel2)) +
-					abs(pixel_get_g(pixel1) - pixel_get_g(pixel2)) +
-					abs(pixel_get_b(pixel1) - pixel_get_b(pixel2));
-				if (source1->alpha_bits > 0 && source2->alpha_bits > 0)
-					difference += abs(pixel_get_a(pixel1) - pixel_get_a(pixel2));
+				int difference = 0;
+				bool add_rgb_diff = true;
+				if (have_alpha) {
+					int a1 = pixel_get_a(pixel1);
+					int a2 = pixel_get_a(pixel2);
+					if ((a1 | a2) == 0)
+						add_rgb_diff = false;
+					else
+						difference += abs(a1 - a2);
+				}
+				else
+					add_rgb_diff = true;
+				if (add_rgb_diff)
+					difference += abs(pixel_get_r(pixel1) - pixel_get_r(pixel2)) +
+						abs(pixel_get_g(pixel1) - pixel_get_g(pixel2)) +
+						abs(pixel_get_b(pixel1) - pixel_get_b(pixel2));
 				if (difference > 255)
 					difference = 255;
 				dest_image[i].pixels[y * dest_image[i].extended_width + x] =

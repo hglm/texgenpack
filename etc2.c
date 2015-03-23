@@ -18,6 +18,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 #include "texgenpack.h"
 #include "decode.h"
@@ -538,7 +539,7 @@ int draw_block4x4_etc2_rgb8(const unsigned char *bitstring, unsigned int *image_
 // 0	Individual mode
 // 1	Differential mode
 
-int block4x4_etc1_rgb8_get_mode(const unsigned char *bitstring) {
+int block4x4_etc1_get_mode(const unsigned char *bitstring) {
 	// Figure out the mode.
 	if ((bitstring[3] & 2) == 0)
 		// Individual mode.
@@ -625,7 +626,8 @@ static char eac_modifier_table[16][8] = {
 	{ -3, -5, -7, -9, 2, 4, 6, 8 }
 };
 
-// This table is currently not used (wasn't faster after benchmarking, perhaps due to cache issues).
+#if 0
+// This table is currently not used.
 static short int modifier_times_multiplier_table[30][16] = {
 	{ 0, -15, -30, -45, -60, -75, -90, -105, -120, -135, -150, -165, -180, -195, -210, -225 },
 	{ 0, -14, -28, -42, -56, -70, -84, -98, -112, -126, -140, -154, -168, -182, -196, -210 },
@@ -659,9 +661,10 @@ static short int modifier_times_multiplier_table[30][16] = {
 	{ 0, 14, 28, 42, 56, 70, 84, 98, 112, 126, 140, 154, 168, 182, 196, 210 },
 };
 
-static int modifier_times_multiplier_fast(int modifier, int multiplier) {
+static int modifier_times_multiplier_lookup(int modifier, int multiplier) {
 	return modifier_times_multiplier_table[modifier + 15][multiplier];
 }
+#endif
 
 static int modifier_times_multiplier(int modifier, int multiplier) {
 	return modifier * multiplier;
@@ -674,7 +677,6 @@ static int modifier_times_multiplier(int modifier, int multiplier) {
 	*((unsigned char *)&image_buffer[(i & 3) * 4 + ((i & 12) >> 2)] + alpha_byte_offset) = \
 		clamp(base_codeword + modifier_times_multiplier(modifier, multiplier)); \
 	}
-
 
 // Draw a 4x4 pixel block using 128-bit ETC2 EAC compression data.
 // This might slow on 32-bit architectures.
@@ -717,6 +719,10 @@ int draw_block4x4_etc2_eac(const unsigned char *bitstring, unsigned int *image_b
 	}
 #endif
 	return 1;
+}
+
+int block4x4_etc2_eac_get_mode(const unsigned char *bitstring) {
+	return block4x4_etc2_rgb8_get_mode(&bitstring[8]);
 }
 
 static int punchthrough_modifier_table[8][4] = {
@@ -953,19 +959,16 @@ int block4x4_etc2_punchthrough_get_mode(const unsigned char *bitstring) {
 	if (R & 0xFF07)
 		// T mode.
 		return 2;
-	else
-	if (G & 0xFF07)
+	else if (G & 0xFF07)
 		// H mode.
 		return 3;
-	else
-	if (B & 0xFF07)
+	else if (B & 0xFF07)
 		// Planar mode.
 		return 4;
 	else
 		// Differential mode.
 		return 1;
 }
-
 
 // Draw a 4x4 pixel block using 64-bit ETC2 PUNCHTHROUGH ALPHA compression data.
 
@@ -1003,7 +1006,7 @@ int draw_block4x4_etc2_punchthrough(const unsigned char *bitstring, unsigned int
 			return 1;
 		}
 		// H mode with punchthrough alpha.
-		draw_block4x4_etc2_punchthrough_T_or_H_mode(bitstring, image_buffer, 0);
+		draw_block4x4_etc2_punchthrough_T_or_H_mode(bitstring, image_buffer, 1);
 		return 1;
 	}
 	else
@@ -1012,6 +1015,8 @@ int draw_block4x4_etc2_punchthrough(const unsigned char *bitstring, unsigned int
 		if ((flags & ETC2_MODE_ALLOWED_PLANAR) == 0)
 			return 0;
 		// Opaque always set.
+		if (flags & MODES_ALLOWED_NON_OPAQUE_ONLY)
+			return 0;
 		draw_block4x4_rgb8_etc2_planar_mode(bitstring, image_buffer);
 		return 1;
 	}
@@ -1020,9 +1025,11 @@ int draw_block4x4_etc2_punchthrough(const unsigned char *bitstring, unsigned int
 		if (opaque)
 			return draw_block4x4_etc1(bitstring, image_buffer, flags);
 		// Differential mode with punchthrough alpha.
+		if ((flags & ETC_MODE_ALLOWED_DIFFERENTIAL) == 0)
+			return 0;
 		draw_block4x4_etc2_punchthrough_differential(bitstring, image_buffer);
 		return 1;
-	}	
+	}
 }
 
 // Decode an 11-bit integer and store it in the first 16-bits in memory of each pixel in image_buffer if offset is zero,
@@ -1178,5 +1185,132 @@ void optimize_block_etc2_punchthrough(unsigned char *bitstring, unsigned char *a
 	bitstring[5] = pixel_index_word >> 16;
 	bitstring[6] = pixel_index_word >> 8;
 	bitstring[7] = pixel_index_word;
+}
+
+void optimize_block_etc2_eac(unsigned char *bitstring, unsigned char *alpha_values, int flags) {
+	// Optimize the alpha values if they are either 0x00 or 0xFF.
+	if ((flags & MODES_ALLOWED_PUNCHTHROUGH_ONLY) == 0)
+		return;
+	int base_codeword = 225;
+	// Select modifier table entry 0: { -3, -6, -9, -15, 2, 5, 8, 14 }
+	int modifier_table = 0;
+	// Select multiplier 15, so that:
+	// pixel value 3 = 225 + 15 * - 15 = 0
+	// pixel value 4 = 225 + 2 * 15 = 255
+	int multiplier = 15;
+	bitstring[0] = base_codeword;
+	bitstring[1] = modifier_table | (multiplier << 4);
+	uint64_t pixels = 0;
+	for (int i = 0; i < 16; i++) {
+		int j = (i & 3) * 4 + ((i & 12) >> 2);
+		uint64_t pixel_index;
+		if (alpha_values[j] == 0)
+			pixel_index = 0x3;
+		else
+			pixel_index = 0x4;
+		pixels |= pixel_index << (45 - i * 3);
+	}
+	bitstring[2] = (uint8_t)(pixels >> 40);
+	bitstring[3] = (uint8_t)(pixels >> 32);
+	bitstring[4] = (uint8_t)(pixels >> 24);
+	bitstring[5] = (uint8_t)(pixels >> 16);
+	bitstring[6] = (uint8_t)(pixels >> 8);
+	bitstring[7] = (uint8_t)pixels;
+}
+
+// set_mode functions: Try to modify the bitstring so that it conforms to a single mode if a single
+// mode is defined in flags.
+
+static void etc2_set_mode_THP(unsigned char *bitstring, int flags) {
+	if ((flags & ETC2_MODE_ALLOWED_ALL) == ETC2_MODE_ALLOWED_T) {
+		// bitstring[0] bits 0, 1, 3, 4 are used.
+		// Bits 2, 5, 6, 7 can be modified.
+		// Modify bits 2, 5, 6, 7 so that R < 0 or R > 31.
+		int R_bits_5_to_7_clear = (bitstring[0] & 0x18) >> 3;
+		int R_compl_bit_2_clear = complement3bit(bitstring[0] & 0x3);
+		if (R_bits_5_to_7_clear + 0x1C + R_compl_bit_2_clear > 31) {
+			// Set bits 5, 6, 7 and clear bit 2.
+			bitstring[0] &= ~0x04;
+			bitstring[0] |= 0xE0;
+		}
+		else {
+			int R_compl_bit_2_set = complement3bit((bitstring[0] & 0x3) | 0x4);
+			if (R_bits_5_to_7_clear + R_compl_bit_2_set < 0) {
+				// Clear bits 5, 6, 7 and set bit 2.
+				bitstring[0] &= ~0xE0;
+				bitstring[0] |= 0x04;
+			}
+			else
+				printf("set_mode: Can't modify ETC2_PUNCHTHROUGH mode to mode T.\n");
+		}
+//		printf("set_mode: bitstring[0] = 0x%02X\n", bitstring[0]);
+	}
+	else if ((flags & ETC2_MODE_ALLOWED_ALL) == ETC2_MODE_ALLOWED_H) {
+		int G_bits_5_to_7_clear = (bitstring[1] & 0x18) >> 3;
+		int G_compl_bit_2_clear = complement3bit(bitstring[1] & 0x3);
+		if (G_bits_5_to_7_clear + 0x1C + G_compl_bit_2_clear > 31) {
+			// Set bits 5, 6, 7 and clear bit 2.
+			bitstring[1] &= ~0x04;
+			bitstring[1] |= 0xE0;
+		}
+		else {
+			int G_compl_bit_2_set = complement3bit((bitstring[1] & 0x3) | 0x4);
+			if (G_bits_5_to_7_clear + G_compl_bit_2_set < 0) {
+				// Clear bits 5, 6, 7 and set bit 2.
+				bitstring[1] &= ~0xE0;
+				bitstring[1] |= 0x04;
+			}
+			else
+				printf("set_mode: Can't modify ETC2_PUNCHTHROUGH mode to mode H.\n");
+		}
+	}
+	else if ((flags & ETC2_MODE_ALLOWED_ALL) == ETC2_MODE_ALLOWED_PLANAR) {
+		int B_bits_5_to_7_clear = (bitstring[2] & 0x18) >> 3;
+		int B_compl_bit_2_clear = complement3bit(bitstring[2] & 0x3);
+		if (B_bits_5_to_7_clear + 0x1C + B_compl_bit_2_clear > 31) {
+			// Set bits 5, 6, 7 and clear bit 2.
+			bitstring[2] &= ~0x04;
+			bitstring[2] |= 0xE0;
+		}
+		else {
+			int B_compl_bit_2_set = complement3bit((bitstring[2] & 0x3) | 0x4);
+			if (B_bits_5_to_7_clear + B_compl_bit_2_set < 0) {
+				// Clear bits 5, 6, 7 and set bit 2.
+				bitstring[2] &= ~0xE0;
+				bitstring[2] |= 0x04;
+			}
+			else
+				printf("set_mode: Can't modify ETC2_PUNCHTHROUGH mode to mode P.\n");
+		}
+//		printf("set_mode: bitstring[2] = 0x%02X\n", bitstring[2]);
+	}
+}
+
+void block4x4_etc1_set_mode(unsigned char *bitstring, int flags) {
+	if ((flags & ETC2_MODE_ALLOWED_ALL) == ETC_MODE_ALLOWED_INDIVIDUAL)
+		bitstring[3] &= ~0x2;
+	else
+		bitstring[3] |= 0x2;
+}
+
+void block4x4_etc2_rgb8_set_mode(unsigned char *bitstring, int flags) {
+	if ((flags & ETC2_MODE_ALLOWED_ALL) == ETC_MODE_ALLOWED_INDIVIDUAL)
+		bitstring[3] &= ~0x2;
+	else {
+		bitstring[3] |= 0x2;
+		etc2_set_mode_THP(bitstring, flags);
+	}
+}
+
+void block4x4_etc2_eac_set_mode(unsigned char *bitstring, int flags) {
+	block4x4_etc2_rgb8_set_mode(&bitstring[8], flags);
+}
+
+void block4x4_etc2_punchthrough_set_mode(unsigned char *bitstring, int flags) {
+	if (flags & MODES_ALLOWED_NON_OPAQUE_ONLY)
+		bitstring[3] &= ~0x2;
+	if (flags & MODES_ALLOWED_OPAQUE_ONLY)
+		bitstring[3] |= 0x2;
+	etc2_set_mode_THP(bitstring, flags);
 }
 

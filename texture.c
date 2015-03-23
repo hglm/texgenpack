@@ -254,6 +254,8 @@ void set_texture_decoding_function(Texture *texture, Image *image) {
 	TextureDecodingFunction decoding_func;
 	TextureComparisonFunction comparison_func;
 	TextureComparisonFunction perceptive_comparison_func = NULL;
+	TextureGetModeFunction get_mode_func = NULL;
+	TextureSetModeFunction set_mode_func = NULL;
 	if (texture->type >= TEXTURE_TYPE_RGBA_ASTC_4X4 && texture->type <= TEXTURE_TYPE_RGBA_ASTC_12X12) {
 		decoding_func = draw_block_rgba_astc;
 		comparison_func = compare_block_any_size_rgba;
@@ -263,18 +265,26 @@ void set_texture_decoding_function(Texture *texture, Image *image) {
 	switch (texture->type) {
 	case TEXTURE_TYPE_ETC1 :
 		decoding_func = draw_block4x4_etc1;
+		get_mode_func = block4x4_etc1_get_mode;
+		set_mode_func = block4x4_etc1_set_mode;
 		break;
 	case TEXTURE_TYPE_ETC2_RGB8 :
 	case TEXTURE_TYPE_ETC2_SRGB8 :
 		decoding_func = draw_block4x4_etc2_rgb8;
+		get_mode_func = block4x4_etc2_rgb8_get_mode;
+		set_mode_func = block4x4_etc2_rgb8_set_mode;
 		break;
 	case TEXTURE_TYPE_ETC2_EAC :
 	case TEXTURE_TYPE_ETC2_SRGB_EAC :
 		decoding_func = draw_block4x4_etc2_eac;
+		get_mode_func = block4x4_etc2_eac_get_mode;
+		set_mode_func = block4x4_etc2_eac_set_mode;
 		break;
 	case TEXTURE_TYPE_ETC2_PUNCHTHROUGH :
 	case TEXTURE_TYPE_ETC2_SRGB_PUNCHTHROUGH :
 		decoding_func = draw_block4x4_etc2_punchthrough;
+		get_mode_func = block4x4_etc2_punchthrough_get_mode;
+		set_mode_func = block4x4_etc2_punchthrough_set_mode;
 		break;
 	case TEXTURE_TYPE_R11_EAC :
 		decoding_func = draw_block4x4_r11_eac;
@@ -329,12 +339,15 @@ void set_texture_decoding_function(Texture *texture, Image *image) {
 		break;
 	case TEXTURE_TYPE_BPTC :
 		decoding_func = draw_block4x4_bptc;
+		get_mode_func = block4x4_bptc_get_mode;
 		break;
 	case TEXTURE_TYPE_BPTC_FLOAT :
 		decoding_func = draw_block4x4_bptc_float;
+		get_mode_func = block4x4_bptc_float_get_mode;
 		break;
 	case TEXTURE_TYPE_BPTC_SIGNED_FLOAT :
 		decoding_func = draw_block4x4_bptc_signed_float;
+		get_mode_func = block4x4_bptc_float_get_mode;
 		break;
 	case TEXTURE_TYPE_RGTC1 :
 		decoding_func = draw_block4x4_rgtc1;
@@ -440,6 +453,8 @@ end :
 	texture->decoding_function = decoding_func;
 	texture->comparison_function = comparison_func;
 	texture->perceptive_comparison_function = perceptive_comparison_func;
+	texture->get_mode_function = get_mode_func;
+	texture->set_mode_function = set_mode_func;
 }
 
 int get_number_of_texture_formats() {

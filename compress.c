@@ -478,10 +478,46 @@ static void seed_128bit(FgenPopulation *pop, unsigned char *bitstring) {
 		*(unsigned int *)&bitstring[12] = user_data->texture->pixels[compressed_block_index * 4 + 3];
 		goto end;
 	}
+	int nu_tries = 0;
+again :
 	fgen_seed_random(pop, bitstring);
+	if (user_data->texture->set_mode_function != NULL)
+		user_data->texture->set_mode_function(bitstring, user_data->flags);
+	unsigned int image_buffer[16];
+	bool valid;
+	valid = user_data->texture->decoding_function(bitstring, image_buffer, user_data->flags);
+	nu_tries++;
+	if (nu_tries == 100)
+		printf("Giving up after 100 tries.\n");
+	else if (!valid)
+		goto again;
+//	printf("Seed: %d tries.\n", nu_tries);
 end :
 	if (user_data->texture->type == TEXTURE_TYPE_DXT3)
 		optimize_block_dxt3(bitstring, user_data->alpha_pixels);
+	else if (user_data->texture->type == TEXTURE_TYPE_ETC2_EAC) {
+		optimize_block_etc2_eac(bitstring, user_data->alpha_pixels, user_data->flags);
+#if 0
+		if (user_data->flags & MODES_ALLOWED_PUNCHTHROUGH_ONLY)
+			printf("Seed: Block is punchthrough-only.\n");
+		unsigned int image_buffer[16];
+		int r =	draw_block4x4_etc2_eac(bitstring, image_buffer, ETC2_MODE_ALLOWED_ALL);
+		if (!r)
+			printf("Seed: Invalid block.\n");
+		printf("Seed: Target alpha values: ");
+		for (int i = 0; i < 16; i++) {
+			int a = user_data->alpha_pixels[i];
+			printf("0x%02X ", a);
+		}
+		printf("\n");
+		printf("Seed: Compressed alpha values (0x%08X): ", *(unsigned int *)bitstring);
+		for (int i = 0; i < 16; i++) {
+			int a = pixel_get_a(image_buffer[i]);
+			printf("0x%02X ", a);
+		}
+		printf("\n");
+#endif
+	}
 }
 
 // Seeding function for archipelagos where each island is compressing the same block.
@@ -538,7 +574,21 @@ static void seed(FgenPopulation *pop, unsigned char *bitstring) {
 		*(unsigned int *)&bitstring[4] = user_data->texture->pixels[compressed_block_index * 2 + 1];
 		goto end;
 	}
+	int nu_tries = 0;
+again :
 	fgen_seed_random(pop, bitstring);
+	if (user_data->texture->set_mode_function != NULL) {
+		user_data->texture->set_mode_function(bitstring, user_data->flags);
+	}
+	unsigned int image_buffer[16];
+	bool valid;
+	valid = user_data->texture->decoding_function(bitstring, image_buffer, user_data->flags);
+	nu_tries++;
+	if (nu_tries == 100)
+		printf("Giving up after 100 tries.\n");
+	else if (!valid)
+		goto again;
+//	printf("Seed: %d tries (flags = 0x%08X).\n", nu_tries, user_data->flags);
 end :
 	if (user_data->texture->type == TEXTURE_TYPE_ETC2_PUNCHTHROUGH)
 		optimize_block_etc2_punchthrough(bitstring, user_data->alpha_pixels);
@@ -669,6 +719,147 @@ static void set_user_data(BlockUserData *user_data, Image *image, Texture *textu
 	user_data->pass = pass;
 }
 
+static void set_user_data_block_flags(BlockUserData *user_data, Texture *texure, int block_flags) {
+	user_data->flags &= ~(MODES_ALLOWED_OPAQUE_ONLY | MODES_ALLOWED_NON_OPAQUE_ONLY |
+		MODES_ALLOWED_PUNCHTHROUGH_ONLY);
+	if (block_flags & BLOCK_FLAG_OPAQUE)
+		user_data->flags |= MODES_ALLOWED_OPAQUE_ONLY;
+	else if (block_flags & BLOCK_FLAG_NON_OPAQUE)
+		user_data->flags |= MODES_ALLOWED_NON_OPAQUE_ONLY;
+	if (block_flags & BLOCK_FLAG_PUNCHTHROUGH)
+		user_data->flags |= MODES_ALLOWED_PUNCHTHROUGH_ONLY;
+}
+
+static void set_user_data_mode_flags(int i, BlockUserData *user_data, int block_flags) {
+		if ((user_data->texture->type & TEXTURE_TYPE_ETC_BIT) && option_allowed_modes_etc2 !=  - 1)
+			user_data->flags = option_allowed_modes_etc2 |
+				ENCODE_BIT;
+		else if (user_data->texture->type == TEXTURE_TYPE_ETC1 && option_modal_etc2 && nu_islands >= 2) {
+			if ((i & 1) == 0)
+				user_data->flags =
+					ETC_MODE_ALLOWED_INDIVIDUAL | ENCODE_BIT;
+			else
+				user_data->flags =
+					ETC_MODE_ALLOWED_DIFFERENTIAL | ENCODE_BIT;
+		}
+		else if ((user_data->texture->type == TEXTURE_TYPE_ETC2_RGB8 ||
+		user_data->texture->type == TEXTURE_TYPE_ETC2_EAC)
+		&& option_modal_etc2 && nu_islands >= 8) {
+			switch (i & 7) {
+			case 0 :
+			case 1 :
+				user_data->flags =
+					ETC_MODE_ALLOWED_INDIVIDUAL;
+				break;
+			case 2 :
+			case 3 :
+				user_data->flags =
+					ETC_MODE_ALLOWED_DIFFERENTIAL;
+				break;
+			case 4 :
+				user_data->flags =
+					ETC2_MODE_ALLOWED_T;
+				break;
+			case 5 :
+				user_data->flags =
+					ETC2_MODE_ALLOWED_H;
+				break;
+			case 6 :
+			case 7 :
+				user_data->flags =
+					ETC2_MODE_ALLOWED_PLANAR;
+				break;
+			}
+			user_data->flags |= ENCODE_BIT;
+		}
+		else if (user_data->texture->type == TEXTURE_TYPE_ETC2_PUNCHTHROUGH && option_modal_etc2 &&
+		nu_islands >= 8) {
+			switch (i & 7) {
+			case 0 :
+			case 1 :
+				user_data->flags =
+					ETC_MODE_ALLOWED_DIFFERENTIAL | ENCODE_BIT;
+				break;
+			case 2 :
+			case 3 :
+				user_data->flags =
+					ETC2_MODE_ALLOWED_T | ENCODE_BIT;
+				break;
+			case 4 :
+			case 5 :
+				user_data->flags =
+					ETC2_MODE_ALLOWED_H | ENCODE_BIT;
+				break;
+			case 6 :
+			case 7 :
+				if (!(block_flags & BLOCK_FLAG_OPAQUE))
+					if (i == 6)
+						user_data->flags = ETC2_MODE_ALLOWED_T;
+					else
+						user_data->flags = ETC2_MODE_ALLOWED_H;
+				else
+					user_data->flags =
+						ETC2_MODE_ALLOWED_PLANAR | ENCODE_BIT;
+				break;
+			}
+		}
+		// For the BPTC texture format, distribute different modes over the available islands.
+		if (user_data->texture->type == TEXTURE_TYPE_BPTC) {
+			if (nu_islands >= 8)
+				user_data->flags = (1 << i) | ENCODE_BIT;
+		}
+		// For the BPTC_FLOAT texture format, distribute different modes over the available islands.
+		if (user_data->texture->type == TEXTURE_TYPE_BPTC_FLOAT ||
+		user_data->texture->type == TEXTURE_TYPE_BPTC_SIGNED_FLOAT) {
+			if (nu_islands >= 8) {
+				switch (i & 7) {
+				case 0 :
+				case 1 :	// Mode 0 (very common).
+					user_data->flags = 0x1 | ENCODE_BIT;
+					break;
+				case 2 :	// Modes 5 (common) and 9.
+					user_data->flags = (1 << 5) | (1 << 9) | ENCODE_BIT;
+					break;
+				case 3 :	// Modes 2 and 6 (common).
+					user_data->flags = (1 << 2) | (1 << 6) | ENCODE_BIT;
+					break;
+				case 4 : 	// Modes 3 and 7 (common).
+					user_data->flags = (1 << 3) | (1 << 7) | ENCODE_BIT;
+					break;
+				case 5 :	// Modes 1, 4, 8 (common).
+					user_data->flags = (1 << 1) | (1 << 4) | (1 << 8)
+						| ENCODE_BIT;
+					break;
+				case 6 :	// Mode 11.
+					user_data->flags = (1 << 11) | ENCODE_BIT;
+					break;
+				case 7 :	// Modes 10, 11, 12, 13.
+					user_data->flags = (0xF << 10) | ENCODE_BIT;
+					break;
+				}
+			}
+			else
+			if (/* option_modal_etc2 && */ nu_islands >= 4) {
+				switch (i & 3) {
+				case 0 :	// Mode 0.
+					user_data->flags = 0x1 | ENCODE_BIT;
+					break;
+				case 1 :	// Modes 2, 4, 6 (common), 8 (common), 9.
+					user_data->flags = (1 << 2) | (1 << 4) |
+						(1 << 6) | (1 << 8) | (1 << 9) | ENCODE_BIT;
+					break;
+				case 2 :	// Modes 1, 3, 5 (common), 7 (common).
+					user_data->flags = (1 << 1) | (1 << 3) |
+						(1 << 5) | (1 << 7) | ENCODE_BIT;
+					break;
+				case 3 :	// Modes 10, 11, 12, 13.
+					user_data->flags = (0xF << 10) | ENCODE_BIT;
+					break;
+				}
+			}
+		}
+}
+
 static char *etc2_modestr = "IDTHP";
 
 // Report the given GA solution and store its bitstring in the texture, printing information if required.
@@ -699,36 +890,15 @@ static void report_solution(FgenIndividual *best, BlockUserData *user_data, int 
 	if (option_verbose) {
 		printf("Block %d: ", (y_offset / texture->block_height) * (texture->extended_width / texture->block_width)
 			+ (x_offset / texture->block_width));
-		if (texture->type == TEXTURE_TYPE_ETC1) {
-			int mode = block4x4_etc1_rgb8_get_mode(best->bitstring);
+		if (texture->type & TEXTURE_TYPE_ETC_BIT) {
+			int mode = texture->get_mode_function(best->bitstring);
 			printf("Mode: %c ", etc2_modestr[mode]);
 			if (compress_callback)
 				mode_statistics[mode]++;
 		}
-		else
-		if (texture->type == TEXTURE_TYPE_ETC2_RGB8 || texture->type == TEXTURE_TYPE_ETC2_EAC) {
-			int mode = block4x4_etc2_rgb8_get_mode(best->bitstring);
-			printf("Mode: %c ", etc2_modestr[mode]);
-			if (compress_callback)
-				mode_statistics[mode]++;
-		}
-		else
-		if (texture->type == TEXTURE_TYPE_ETC2_PUNCHTHROUGH) {
-			int mode = block4x4_etc2_punchthrough_get_mode(best->bitstring);
-			printf("Mode: %c ", etc2_modestr[mode]);
-			if (compress_callback)
-				mode_statistics[mode]++;
-		}
-		else
-		if (texture->type == TEXTURE_TYPE_BPTC) {
-			int mode = block4x4_bptc_get_mode(best->bitstring);
-			printf("Mode: %d ", mode);
-			if (compress_callback)
-				mode_statistics[mode]++;
-		}
-		else
-		if (texture->type == TEXTURE_TYPE_BPTC_FLOAT || texture->type == TEXTURE_TYPE_BPTC_SIGNED_FLOAT) {
-			int mode = block4x4_bptc_float_get_mode(best->bitstring);
+		else if (texture->type == TEXTURE_TYPE_BPTC ||
+		texture->type == TEXTURE_TYPE_BPTC_FLOAT || texture->type == TEXTURE_TYPE_BPTC_SIGNED_FLOAT) {
+			int mode = texture->get_mode_function(best->bitstring);
 			printf("Mode: %d ", mode);
 			if (compress_callback)
 				mode_statistics[mode]++;
@@ -858,125 +1028,7 @@ static void compress_with_archipelago(Image *image, Texture *texture) {
 		fgen_set_migration_probability(pops[i], 0.05);
 		pops[i]->user_data = (BlockUserData *)malloc(sizeof(BlockUserData));
 		set_user_data((BlockUserData *)pops[i]->user_data, image, texture, 1);
-		if ((texture->type & TEXTURE_TYPE_ETC_BIT) && option_allowed_modes_etc2 !=  - 1)
-			((BlockUserData *)pops[i]->user_data)->flags = option_allowed_modes_etc2 |
-				ENCODE_BIT;
-		else if (texture->type == TEXTURE_TYPE_ETC1 && option_modal_etc2 && nu_islands >= 2) {
-			if ((i & 1) == 0)
-				((BlockUserData *)pops[i]->user_data)->flags =
-					ETC_MODE_ALLOWED_INDIVIDUAL | ENCODE_BIT;
-			else
-				((BlockUserData *)pops[i]->user_data)->flags =
-					ETC_MODE_ALLOWED_DIFFERENTIAL | ENCODE_BIT;
-		}
-		else if ((texture->type == TEXTURE_TYPE_ETC2_RGB8 || texture->type == TEXTURE_TYPE_ETC2_EAC)
-		&& option_modal_etc2 && nu_islands >= 8) {
-			switch (i & 7) {
-			case 0 :
-			case 1 :
-				((BlockUserData *)pops[i]->user_data)->flags =
-					ETC_MODE_ALLOWED_INDIVIDUAL;
-				break;
-			case 2 :
-			case 3 :
-				((BlockUserData *)pops[i]->user_data)->flags =
-					ETC_MODE_ALLOWED_DIFFERENTIAL;
-				break;
-			case 4 :
-				((BlockUserData *)pops[i]->user_data)->flags =
-					ETC2_MODE_ALLOWED_T;
-				break;
-			case 5 :
-				((BlockUserData *)pops[i]->user_data)->flags =
-					ETC2_MODE_ALLOWED_H;
-				break;
-			case 6 :
-			case 7 :
-				((BlockUserData *)pops[i]->user_data)->flags =
-					ETC2_MODE_ALLOWED_PLANAR;
-				break;
-			}
-			((BlockUserData *)pops[i]->user_data)->flags |= ENCODE_BIT;
-		}
-		else if (texture->type == TEXTURE_TYPE_ETC2_PUNCHTHROUGH && option_modal_etc2 && nu_islands >= 8) {
-			switch (i & 7) {
-			case 0 :
-			case 1 :
-				((BlockUserData *)pops[i]->user_data)->flags =
-					ETC_MODE_ALLOWED_DIFFERENTIAL | ENCODE_BIT;
-				break;
-			case 2 :
-			case 3 :
-				((BlockUserData *)pops[i]->user_data)->flags =
-					ETC2_MODE_ALLOWED_T | ENCODE_BIT;
-				break;
-			case 4 :
-			case 5 :
-				((BlockUserData *)pops[i]->user_data)->flags =
-					ETC2_MODE_ALLOWED_H | ENCODE_BIT;
-				break;
-			case 6 :
-			case 7 :
-				((BlockUserData *)pops[i]->user_data)->flags =
-					ETC2_MODE_ALLOWED_PLANAR | ENCODE_BIT;
-				break;
-			}
-		}
-		if (texture->type == TEXTURE_TYPE_ETC2_EAC || texture->type == TEXTURE_TYPE_ETC2_PUNCHTHROUGH) {
-			// Check whether block is opaque or non-opaque.
-			// Set ETC2_MODE_ALLOWED_OPAQUE_ONLY or ETC2_MODE_ALLOWED_NON_OPAQUE_ONLY for
-			// ETC2_PUNCHTHROUGH if appropriate.
-			// For ETC_RGB8_EAC, seed with appropriate alpha values.
-		}
-		// For the BPTC_FLOAT texture format, distribute different modes over the available islands.
-		if (texture->type == TEXTURE_TYPE_BPTC_FLOAT || texture->type == TEXTURE_TYPE_BPTC_SIGNED_FLOAT) {
-			if (nu_islands >= 8) {
-				switch (i & 7) {
-				case 0 :
-				case 1 :	// Mode 0 (very common).
-					((BlockUserData *)pops[i]->user_data)->flags = 0x1 | ENCODE_BIT;
-					break;
-				case 2 :	// Modes 5 (common) and 9.
-					((BlockUserData *)pops[i]->user_data)->flags = (1 << 5) | (1 << 9) | ENCODE_BIT;
-					break;
-				case 3 :	// Modes 2 and 6 (common).
-					((BlockUserData *)pops[i]->user_data)->flags = (1 << 2) | (1 << 6) | ENCODE_BIT;
-					break;
-				case 4 : 	// Modes 3 and 7 (common).
-					((BlockUserData *)pops[i]->user_data)->flags = (1 << 3) | (1 << 7) | ENCODE_BIT;
-					break;
-				case 5 :	// Modes 1, 4, 8 (common).
-					((BlockUserData *)pops[i]->user_data)->flags = (1 << 1) | (1 << 4) | (1 << 8)
-						| ENCODE_BIT;
-					break;
-				case 6 :	// Mode 11.
-					((BlockUserData *)pops[i]->user_data)->flags = (1 << 11) | ENCODE_BIT;
-					break;
-				case 7 :	// Modes 10, 11, 12, 13.
-					((BlockUserData *)pops[i]->user_data)->flags = (0xF << 10) | ENCODE_BIT;
-					break;
-				}
-			}
-			else
-			if (/* option_modal_etc2 && */ nu_islands >= 4) {
-				switch (i & 3) {
-				case 0 :	// Mode 0.
-					((BlockUserData *)pops[i]->user_data)->flags = 0x1 | ENCODE_BIT;
-					break;
-				case 1 :	// Modes 2, 4, 6 (common), 8 (common), 9.
-					((BlockUserData *)pops[i]->user_data)->flags = (1 << 2) | (1 << 4) |
-						(1 << 6) | (1 << 8) | (1 << 9) | ENCODE_BIT;
-					break;
-				case 2 :	// Modes 1, 3, 5 (common), 7 (common).
-					((BlockUserData *)pops[i]->user_data)->flags = (1 << 1) | (1 << 3) |
-						(1 << 5) | (1 << 7) | ENCODE_BIT;
-					break;
-				case 3 :	// Modes 10, 11, 12, 13.
-					((BlockUserData *)pops[i]->user_data)->flags = (0xF << 10) | ENCODE_BIT;
-					break;
-				}
-			}
-		}
+
 	}
 	for (int i = 0; i < nu_islands_second_pass; i++) {
 		// Create second pass GAs.
@@ -1015,8 +1067,6 @@ static void compress_with_archipelago(Image *image, Texture *texture) {
 			if ((texture->type & (TEXTURE_TYPE_DXTC_BIT | TEXTURE_TYPE_ALPHA_BIT)) ==
 			(TEXTURE_TYPE_DXTC_BIT | TEXTURE_TYPE_ALPHA_BIT) || texture->type == TEXTURE_TYPE_ETC2_EAC ||
 			texture->type == TEXTURE_TYPE_ETC2_PUNCHTHROUGH || texture->type == TEXTURE_TYPE_BPTC) {
-//				set_alpha_pixels(image, x, y, texture->block_width, texture->block_height,
-					//alpha_pixels);
 				// Get early parameters for block (whether it is completely opaque or non-opaque,
 				// whether it uses only a limited amount of colors), and set alpha pixels.
 				block_flags = get_block_flags_rgba8(image, x, y, texture->block_width,
@@ -1055,11 +1105,8 @@ static void compress_with_archipelago(Image *image, Texture *texture) {
 					user_data->texture_pixels_above = texture_pixels_above;
 					user_data->texture_pixels_left = texture_pixels_left;
 				}
-				user_data->flags &= ~(MODES_ALLOWED_OPAQUE_ONLY | MODES_ALLOWED_NON_OPAQUE_ONLY);
-				if (block_flags & BLOCK_FLAG_OPAQUE)
-					user_data->flags |= MODES_ALLOWED_OPAQUE_ONLY;
-				else if (block_flags & BLOCK_FLAG_NON_OPAQUE)
-					user_data->flags |= MODES_ALLOWED_NON_OPAQUE_ONLY;
+				set_user_data_mode_flags(i, user_data, block_flags);
+				set_user_data_block_flags(user_data, texture, block_flags);
 			}
 			// Run the genetic algorithm.
 			int nu_concurrent_islands = nu_islands;
@@ -1077,15 +1124,22 @@ static void compress_with_archipelago(Image *image, Texture *texture) {
 				i += n;
 			}
 			// Report the best solution.
-			FgenIndividual *best = fgen_best_individual_of_archipelago(nu_islands, pops);
+			int best_island;
+			FgenIndividual *best = fgen_best_individual_and_island_of_archipelago(nu_islands,
+				pops, &best_island);
 			bool compress_callback;
 			if (isinf(best->fitness))
 				compress_callback = true;
 			else
 				compress_callback = false;
-			report_solution(best, (BlockUserData *)pops[0]->user_data, pops[0]->generation,
-				compress_callback);
-			if (option_verbose == 2)
+//			if (texture->get_mode_function != NULL) {
+//				int mode = texture->get_mode_function(best->bitstring);
+//				printf("mode = %d", mode);
+//			}
+//			printf("\n");
+			report_solution(best, (BlockUserData *)pops[best_island]->user_data,
+				pops[best_island]->generation, compress_callback);
+			if (option_verbose >= 2)
 				for (int i = 0; i < nu_islands; i++) {
 					printf("Block %d: ", (y / texture->block_height) * (texture->extended_width /
 						texture->block_width) + (x / texture->block_width));
@@ -1103,13 +1157,25 @@ static void compress_with_archipelago(Image *image, Texture *texture) {
 						if (modes_allowed & ETC2_MODE_ALLOWED_PLANAR)
 							printf("P");
 					}
+					else if (texture->type == TEXTURE_TYPE_BPTC) {
+						printf("Modes: ");
+						int modes_allowed = ((BlockUserData *)pops[i]->user_data)->flags;
+						for (int j = 0; j < 8; j++)
+						if (modes_allowed & (1 << j))
+							printf("%d", j);
+					}
 					FgenIndividual *best = fgen_best_individual_of_population(pops[i]);
 					double rmse = sqrt((1.0 / best->fitness) / 16);
 					printf(" RMSE per pixel: %lf\n", rmse);
 					if (option_verbose >= 3 && rmse >= 1.0) {
 						for (int j = 0; j < pops[i]->size; j++) {
 							FgenIndividual *ind = pops[i]->ind[j];
-							printf("  Individual %d: RMSE per pixel: %lf\n", j,
+							printf("  Individual %d: ", j);
+							if (texture->get_mode_function != NULL) {
+								int mode = texture->get_mode_function(ind->bitstring);
+								printf("Mode: %d ", mode);
+							}
+							printf("RMSE per pixel: %lf\n",
 								sqrt((1.0 / ind->fitness) / 16));
 						}
 					}
@@ -1117,44 +1183,40 @@ static void compress_with_archipelago(Image *image, Texture *texture) {
 			if (!isinf(best->fitness)) {
 				// Copy block user_data from first pass.
 				for (int i = 0; i < nu_islands_second_pass; i++) {
-					*(BlockUserData *)pops2[i]->user_data = *(BlockUserData *)pops[0]->user_data;
+					*(BlockUserData *)pops2[i]->user_data =
+						*(BlockUserData *)pops[best_island]->user_data;
 					// For ETC1, ETC2, BPTC and BPTC_FLOAT, preserve the mode of the compressed
 					// block during the second pass.
 					if ((texture->type & TEXTURE_TYPE_ETC_BIT) ||
 					texture->type == TEXTURE_TYPE_BPTC ||
 					texture->type == TEXTURE_TYPE_BPTC_FLOAT ||
 					texture->type == TEXTURE_TYPE_BPTC_SIGNED_FLOAT) {
-						int mode;
-						if (texture->type == TEXTURE_TYPE_ETC1)
-							mode = block4x4_etc1_rgb8_get_mode(best->bitstring);
-						else if (texture->type & TEXTURE_TYPE_ETC_BIT)
-							if (texture->type == TEXTURE_TYPE_ETC2_PUNCHTHROUGH)
-								mode = block4x4_etc2_punchthrough_get_mode(
-									best->bitstring);
-							else
-								mode = block4x4_etc2_rgb8_get_mode(best->bitstring);
-						else if (texture->type == TEXTURE_TYPE_BPTC)
-							mode = block4x4_bptc_get_mode(best->bitstring);
-						else
-							mode = block4x4_bptc_float_get_mode(best->bitstring);
+						int mode = texture->get_mode_function(best->bitstring);
 						((BlockUserData *)pops2[i]->user_data)->flags = (1 << mode) |
 							 ENCODE_BIT;
-						if (block_flags & BLOCK_FLAG_OPAQUE)
-							((BlockUserData *)pops2[i]->user_data)->flags |=
-								MODES_ALLOWED_OPAQUE_ONLY;
-						else if (block_flags & BLOCK_FLAG_NON_OPAQUE)
-							((BlockUserData *)pops2[i]->user_data)->flags |=
-								MODES_ALLOWED_NON_OPAQUE_ONLY;
+						set_user_data_block_flags((BlockUserData *)pops2[i]->user_data,
+							texture, block_flags);
 					}
 				}
 				// Run the second pass.
-				if (option_max_threads != -1 && option_max_threads < nu_islands_second_pass)
-					fgen_run_archipelago(nu_islands_second_pass, pops2, - 1);
-				else
-					fgen_run_archipelago_threaded(nu_islands_second_pass, pops2, - 1);
-				best = fgen_best_individual_of_archipelago(nu_islands_second_pass, pops2);
-				report_solution(best, (BlockUserData *)pops2[0]->user_data, pops2[0]->generation,
-					true);
+				nu_concurrent_islands = nu_islands_second_pass;
+				if (option_max_threads != -1 && nu_islands_second_pass > option_max_threads)
+					nu_concurrent_islands = option_max_threads;
+				for (int i = 0; i < nu_islands_second_pass;) {
+					int n;
+					n = nu_concurrent_islands;
+					if (i + n > nu_islands_second_pass)
+						n = nu_islands_second_pass - i;
+					if (n == 1)
+						fgen_run(pops2[i], - 1);
+					else
+						fgen_run_archipelago_threaded(n, &pops2[i], - 1);
+					i += n;
+				}
+				best = fgen_best_individual_and_island_of_archipelago(nu_islands_second_pass, pops2,
+					&best_island);
+				report_solution(best, (BlockUserData *)pops2[best_island]->user_data,
+					pops2[best_island]->generation, true);
 			}
 			if (((BlockUserData *)pops[0]->user_data)->stop_signalled)
 				goto end;
@@ -1458,7 +1520,7 @@ static int get_block_flags_rgba8(Image *image, int x, int y, int w, int h, unsig
 // Optimize the alpha component of 1-bit alpha textures for the whole image.
 
 static void optimize_alpha(Image *image, Texture *texture) {
-	if (texture->type != TEXTURE_TYPE_ETC2_PUNCHTHROUGH && texture->type != TEXTURE_TYPE_DXT3)
+	if (!(texture->type == TEXTURE_TYPE_ETC2_PUNCHTHROUGH || texture->type == TEXTURE_TYPE_DXT3))
 		return;
 	unsigned char alpha_pixels[16];
 	for (int y = 0; y < image->extended_height; y += texture->block_height)

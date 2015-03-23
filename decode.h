@@ -31,6 +31,7 @@ enum {
 	BPTC_MODE_ALLOWED_ALL = 0xFF,
 	MODES_ALLOWED_OPAQUE_ONLY = 0x100,
 	MODES_ALLOWED_NON_OPAQUE_ONLY = 0x200,
+	MODES_ALLOWED_PUNCHTHROUGH_ONLY = 0x400,
 	BPTC_FLOAT_MODE_ALLOWED_ALL = 0x3FFF,
 	ENCODE_BIT = 0x10000
 };
@@ -47,12 +48,19 @@ int draw_block4x4_rg11_eac(const unsigned char *bitstring, unsigned int *image_b
 int draw_block4x4_signed_r11_eac(const unsigned char *bitstring, unsigned int *image_buffer, int flags);
 int draw_block4x4_signed_rg11_eac(const unsigned char *bitstring, unsigned int *image_buffer, int flags);
 // Return ETC1 mode (0 or 1).
-int block4x4_etc1_rgb8_get_mode(const unsigned char *bitstring);
+int block4x4_etc1_get_mode(const unsigned char *bitstring);
 // Return ETC2 mode number from 0 to 4.
 int block4x4_etc2_rgb8_get_mode(const unsigned char *bitstring);
+int block4x4_etc2_eac_get_mode(const unsigned char *bitstring);
 int block4x4_etc2_punchthrough_get_mode(const unsigned char *bitstring);
+// Modify bitstring to conform to modes.
+void block4x4_etc1_set_mode(unsigned char *bitstring, int flags);
+void block4x4_etc2_rgb8_set_mode(unsigned char *bitstring, int flags);
+void block4x4_etc2_punchthrough_set_mode(unsigned char *bitstring, int flags);
+void block4x4_etc2_eac_set_mode(unsigned char *bitstring, int flags);
 // "Manual" optimization function.
 void optimize_block_etc2_punchthrough(unsigned char *bitstring, unsigned char *alpha_values);
+void optimize_block_etc2_eac(unsigned char *bitstring, unsigned char *alpha_values, int flags);
 
 // Functions defined in dxtc.c.
 
@@ -67,7 +75,7 @@ void optimize_block_dxt3(unsigned char *bitstring, unsigned char *alpha_values);
 int draw_block_rgba_astc(const unsigned char *bitstring, unsigned int *image_buffer, int flags);
 void convert_astc_texture_to_image(Texture *texture, Image *image);
 void decompress_astc_file(const char *filename, Image *image);
-void compress_image_to_astc_texture(Image *image, int texture_type, Texture *exture);
+void compress_image_to_astc_texture(Image *image, int texture_type, Texture *texture);
 int match_astc_block_size(int w, int h);
 int get_astc_block_size_width(int astc_block_type);
 int get_astc_block_size_height(int astc_block_type);

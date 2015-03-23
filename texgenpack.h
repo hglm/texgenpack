@@ -135,6 +135,8 @@ typedef struct BlockUserData_t BlockUserData;
 
 typedef int (*TextureDecodingFunction)(const unsigned char *bitstring, unsigned int *image_buffer, int flags);
 typedef double (*TextureComparisonFunction)(unsigned int *image_buffer, BlockUserData *user_data);
+typedef int (*TextureGetModeFunction)(const unsigned char *bitstring);
+typedef void (*TextureSetModeFunction)(unsigned char *bitstring, int flags);
 
 typedef struct {
 	unsigned int *pixels;
@@ -150,6 +152,8 @@ typedef struct {
 	TextureDecodingFunction decoding_function;
 	TextureComparisonFunction comparison_function;
 	TextureComparisonFunction perceptive_comparison_function;
+	TextureGetModeFunction get_mode_function;
+	TextureSetModeFunction set_mode_function;
 	TextureInfo *info;
 } Texture;
 
