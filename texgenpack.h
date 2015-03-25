@@ -165,6 +165,7 @@ struct BlockUserData_t {
 	int flags;
 	Texture *texture;
 	unsigned char *alpha_pixels;
+	unsigned int *colors;
 	int stop_signalled;
 	int pass;
 	unsigned int *texture_pixels;

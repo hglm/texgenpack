@@ -28,7 +28,7 @@ Prerequisites for compilation:
 
 	libpng (development version)
 	GTK+ 3 development libraries (for GUI program)
-	libfgen (https://github.com/hglm/libfgen.git)
+	libfgen (https://github.com/hglm/libfgen.git) >= version 0.2.2
 
 For example, the complete compilation and installation process on a Debian-
 ased system might look like this:

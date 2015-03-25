@@ -33,7 +33,8 @@ enum {
 	MODES_ALLOWED_NON_OPAQUE_ONLY = 0x200,
 	MODES_ALLOWED_PUNCHTHROUGH_ONLY = 0x400,
 	BPTC_FLOAT_MODE_ALLOWED_ALL = 0x3FFF,
-	ENCODE_BIT = 0x10000
+	ENCODE_BIT = 0x10000,
+	TWO_COLORS = 0x20000,
 };
 
 // Functions defined in etc2.c.
@@ -59,8 +60,8 @@ void block4x4_etc2_rgb8_set_mode(unsigned char *bitstring, int flags);
 void block4x4_etc2_punchthrough_set_mode(unsigned char *bitstring, int flags);
 void block4x4_etc2_eac_set_mode(unsigned char *bitstring, int flags);
 // "Manual" optimization function.
-void optimize_block_etc2_punchthrough(unsigned char *bitstring, unsigned char *alpha_values);
-void optimize_block_etc2_eac(unsigned char *bitstring, unsigned char *alpha_values, int flags);
+void optimize_block_alpha_etc2_punchthrough(unsigned char *bitstring, unsigned char *alpha_values);
+void optimize_block_alpha_etc2_eac(unsigned char *bitstring, unsigned char *alpha_values, int flags);
 
 // Functions defined in dxtc.c.
 
@@ -68,7 +69,7 @@ int draw_block4x4_dxt1(const unsigned char *bitstring, unsigned int *image_buffe
 int draw_block4x4_dxt1a(const unsigned char *bitstring, unsigned int *image_buffer, int flags);
 int draw_block4x4_dxt3(const unsigned char *bitstring, unsigned int *image_buffer, int flags);
 int draw_block4x4_dxt5(const unsigned char *bitstring, unsigned int *image_buffer, int flags);
-void optimize_block_dxt3(unsigned char *bitstring, unsigned char *alpha_values);
+void optimize_block_alpha_dxt3(unsigned char *bitstring, unsigned char *alpha_values);
 
 // Functions defined in astc.c
 
@@ -88,6 +89,8 @@ int draw_block4x4_bptc_float(const unsigned char *bitstring, unsigned int *image
 int draw_block4x4_bptc_signed_float(const unsigned char *bitstring, unsigned int *image_buffer, int flags);
 int block4x4_bptc_float_get_mode(const unsigned char *bitstring);
 void block4x4_bptc_set_mode(unsigned char *bitstring, int flags);
+// Try to preinitialize colors for particular modes.
+void bptc_set_block_colors(unsigned char *bitstring, int flags, unsigned int *colors);
 
 // Functions defined in rgtc.c
 

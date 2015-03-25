@@ -50,7 +50,8 @@ static void compress_with_archipelago(Image *image, Texture *texture);
 static void compress_multiple_blocks_concurrently(Image *image, Texture *texture);
 static void compress_multiple_blocks_concurrently_second_pass(Image *image, Texture *texture);
 static void set_alpha_pixels(Image *image, int x, int y, int w, int h, unsigned char *alpha_pixels);
-static int get_block_flags_rgba8(Image *image, int x, int y, int w, int h, unsigned char *alpha_pixels);
+static int get_block_flags_rgba8(Image *image, int x, int y, int w, int h, unsigned char *alpha_pixels,
+unsigned int *colors);
 static void optimize_alpha(Image *image, Texture *texture);
 static double get_rmse_threshold(Texture *texture, int speed, Image *image);
 
@@ -431,7 +432,7 @@ static void seed_128bit(FgenPopulation *pop, unsigned char *bitstring) {
 	int factor;
 	if (population_size == 128)
 		factor = 1;
-	else	// population_size == 64
+	else	// population_size == 64?
 		factor = 2;
 	if (r < 2 * factor && user_data->x_offset > 0) {
 		// Seed with solution to the left with chance 1/128th (1/64th if population size is 64).
@@ -492,11 +493,15 @@ again :
 	else if (!valid)
 		goto again;
 //	printf("Seed: %d tries.\n", nu_tries);
+
 end :
+	if (user_data->texture->type == TEXTURE_TYPE_BPTC)
+		bptc_set_block_colors(bitstring, user_data->flags, user_data->colors);
+
 	if (user_data->texture->type == TEXTURE_TYPE_DXT3)
-		optimize_block_dxt3(bitstring, user_data->alpha_pixels);
+		optimize_block_alpha_dxt3(bitstring, user_data->alpha_pixels);
 	else if (user_data->texture->type == TEXTURE_TYPE_ETC2_EAC) {
-		optimize_block_etc2_eac(bitstring, user_data->alpha_pixels, user_data->flags);
+		optimize_block_alpha_etc2_eac(bitstring, user_data->alpha_pixels, user_data->flags);
 #if 0
 		if (user_data->flags & MODES_ALLOWED_PUNCHTHROUGH_ONLY)
 			printf("Seed: Block is punchthrough-only.\n");
@@ -591,7 +596,7 @@ again :
 //	printf("Seed: %d tries (flags = 0x%08X).\n", nu_tries, user_data->flags);
 end :
 	if (user_data->texture->type == TEXTURE_TYPE_ETC2_PUNCHTHROUGH)
-		optimize_block_etc2_punchthrough(bitstring, user_data->alpha_pixels);
+		optimize_block_alpha_etc2_punchthrough(bitstring, user_data->alpha_pixels);
 }
 
 // 128-bit seeding function for archipelagos where each island is compressing a different block (--ultra setting).
@@ -631,7 +636,7 @@ static void seed2_128bit(FgenPopulation *pop, unsigned char *bitstring) {
 	fgen_seed_random(pop, bitstring);
 end : ;
 	if (user_data->texture->type == TEXTURE_TYPE_DXT3)
-		optimize_block_dxt3(bitstring, user_data->alpha_pixels);
+		optimize_block_alpha_dxt3(bitstring, user_data->alpha_pixels);
 }
 
 // Seeding function for archipelagos where each island is compressing a different block (--ultra setting).
@@ -669,7 +674,7 @@ static void seed2(FgenPopulation *pop, unsigned char *bitstring) {
 	fgen_seed_random(pop, bitstring);
 end : ;
 	if (user_data->texture->type == TEXTURE_TYPE_ETC2_PUNCHTHROUGH)
-		optimize_block_etc2_punchthrough(bitstring, user_data->alpha_pixels);
+		optimize_block_alpha_etc2_punchthrough(bitstring, user_data->alpha_pixels);
 }
 
 // Seeding function for second_pass. Seed whole population with same texture data.
@@ -721,13 +726,15 @@ static void set_user_data(BlockUserData *user_data, Image *image, Texture *textu
 
 static void set_user_data_block_flags(BlockUserData *user_data, Texture *texure, int block_flags) {
 	user_data->flags &= ~(MODES_ALLOWED_OPAQUE_ONLY | MODES_ALLOWED_NON_OPAQUE_ONLY |
-		MODES_ALLOWED_PUNCHTHROUGH_ONLY);
+		MODES_ALLOWED_PUNCHTHROUGH_ONLY | TWO_COLORS);
 	if (block_flags & BLOCK_FLAG_OPAQUE)
 		user_data->flags |= MODES_ALLOWED_OPAQUE_ONLY;
 	else if (block_flags & BLOCK_FLAG_NON_OPAQUE)
 		user_data->flags |= MODES_ALLOWED_NON_OPAQUE_ONLY;
 	if (block_flags & BLOCK_FLAG_PUNCHTHROUGH)
 		user_data->flags |= MODES_ALLOWED_PUNCHTHROUGH_ONLY;
+	if (block_flags & BLOCK_FLAG_TWO_COLORS)
+		user_data->flags |= TWO_COLORS;
 }
 
 static void set_user_data_mode_flags(int i, BlockUserData *user_data, int block_flags) {
@@ -998,6 +1005,7 @@ unsigned int *allocate_texture_pixels(Texture *texture) {
 
 static void compress_with_archipelago(Image *image, Texture *texture) {
 	unsigned char *alpha_pixels = (unsigned char *)alloca(texture->block_width * texture->block_height);
+	unsigned int colors[2];
 	FgenPopulation **pops = (FgenPopulation **)alloca(sizeof(FgenPopulation *) * nu_islands);
 	FgenPopulation **pops2 = (FgenPopulation **)alloca(sizeof(FgenPopulation *) * nu_islands_second_pass);
 	if (!option_quiet) {
@@ -1082,7 +1090,7 @@ static void compress_with_archipelago(Image *image, Texture *texture) {
 				// Get early parameters for block (whether it is completely opaque or non-opaque,
 				// whether it uses only a limited amount of colors), and set alpha pixels.
 				block_flags = get_block_flags_rgba8(image, x, y, texture->block_width,
-					texture->block_height, alpha_pixels);
+					texture->block_height, alpha_pixels, colors);
 			}
 			// Calculate pointers to decompressed pixel buffer for block, and block above and left.
 			unsigned int *texture_pixels_block, *texture_pixels_above, *texture_pixels_left;
@@ -1112,6 +1120,7 @@ static void compress_with_archipelago(Image *image, Texture *texture) {
 				user_data->x_offset = x;
 				user_data->y_offset = y;
 				user_data->alpha_pixels = alpha_pixels;
+				user_data->colors = colors;
 				if (option_perceptive) {
 					user_data->texture_pixels = texture_pixels_block;
 					user_data->texture_pixels_above = texture_pixels_above;
@@ -1500,35 +1509,40 @@ static void set_alpha_pixels(Image *image, int x, int y, int w, int h, unsigned 
 // Determine block flags for RGBA8 block (whether it is completely opaque or non-opaque,
 // whether it uses only a limited amount of colors) and copy alpha pixel values into an array.
 
-static int get_block_flags_rgba8(Image *image, int x, int y, int w, int h, unsigned char *alpha_pixels) {
-	if (image->alpha_bits == 0)
-		return BLOCK_FLAG_OPAQUE | BLOCK_FLAG_PUNCHTHROUGH;
-	int block_flags = BLOCK_FLAG_OPAQUE | BLOCK_FLAG_NON_OPAQUE | BLOCK_FLAG_PUNCHTHROUGH |
-		BLOCK_FLAG_TWO_COLORS;
+static int get_block_flags_rgba8(Image *image, int x, int y, int w, int h, unsigned char *alpha_pixels,
+unsigned int *colors) {
+	int block_flags;
+	if (image->alpha_bits > 0)
+		block_flags = BLOCK_FLAG_OPAQUE | BLOCK_FLAG_NON_OPAQUE | BLOCK_FLAG_PUNCHTHROUGH |
+			BLOCK_FLAG_TWO_COLORS;
+	else
+		block_flags = BLOCK_FLAG_OPAQUE | BLOCK_FLAG_PUNCHTHROUGH | BLOCK_FLAG_TWO_COLORS;
 	int color0 = - 1;
 	int color1 = - 1;
 	for (int by = 0; by < h; by++)
 		for (int bx = 0; bx < w; bx++) {
-			int alpha;
-			if (y + by < image->height && x + bx < image->width) {
-				unsigned int pixel = image->pixels[(y + by) * image->extended_width + x + bx];
-				alpha = pixel_get_a(pixel);
+			if (image->alpha_bits > 0) {
+				int alpha;
+				if (y + by < image->height && x + bx < image->width) {
+					unsigned int pixel = image->pixels[(y + by) * image->extended_width + x + bx];
+					alpha = pixel_get_a(pixel);
+				}
+				else {
+					// If the pixel falls on the border, conform to the current findings.
+					if (block_flags & BLOCK_FLAG_OPAQUE)
+						alpha = 0xFF;
+					else
+						alpha = 0x00;
+				}
+				if (alpha == 0xFF)
+					block_flags &= (~BLOCK_FLAG_NON_OPAQUE);
+				else {
+					block_flags &= (~BLOCK_FLAG_OPAQUE);
+					if (alpha != 0x00)
+						block_flags &= (~BLOCK_FLAG_PUNCHTHROUGH);
+				}
+				alpha_pixels[by * w + bx] = alpha;
 			}
-			else {
-				// If the pixel falls on the border, conform to the current findings.
-				if (block_flags & BLOCK_FLAG_OPAQUE)
-					alpha = 0xFF;
-				else
-					alpha = 0x00;
-			}
-			if (alpha == 0xFF)
-				block_flags &= (~BLOCK_FLAG_NON_OPAQUE);
-			else {
-				block_flags &= (~BLOCK_FLAG_OPAQUE);
-				if (alpha != 0x00)
-					block_flags &= (~BLOCK_FLAG_PUNCHTHROUGH);
-			}
-			alpha_pixels[by * w + bx] = alpha;
 			if (y + by < image->height && x + bx < image->width) {
 				unsigned int pixel = image->pixels[(y + by) * image->extended_width + x + bx];
 				int rgb = pixel_get_r(pixel) + (pixel_get_g(pixel) << 8) + (pixel_get_b(pixel) << 16);
@@ -1541,6 +1555,13 @@ static int get_block_flags_rgba8(Image *image, int x, int y, int w, int h, unsig
 						block_flags &= (~BLOCK_FLAG_TWO_COLORS);
 			}
 		}
+	if (block_flags & BLOCK_FLAG_TWO_COLORS) {
+		colors[0] = color0;
+		if (color1 == - 1)
+			colors[1] = colors[0];
+		else
+			colors[1] = color1;
+	}
 	return block_flags;
 }
 
@@ -1560,11 +1581,11 @@ static void optimize_alpha(Image *image, Texture *texture) {
 			switch (texture->type) {
 			case TEXTURE_TYPE_ETC2_PUNCHTHROUGH :
 				bitstring = (unsigned char *)&texture->pixels[compressed_block_index * 2];
-				optimize_block_etc2_punchthrough(bitstring, alpha_pixels);
+				optimize_block_alpha_etc2_punchthrough(bitstring, alpha_pixels);
 				break;
 			case TEXTURE_TYPE_DXT3 :
 				bitstring = (unsigned char *)&texture->pixels[compressed_block_index * 4];
-				optimize_block_dxt3(bitstring, alpha_pixels);
+				optimize_block_alpha_dxt3(bitstring, alpha_pixels);
 				break;
 			}
 		}

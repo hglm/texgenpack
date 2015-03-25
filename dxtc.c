@@ -207,7 +207,7 @@ int draw_block4x4_dxt5(const unsigned char *bitstring, unsigned int *image_buffe
 
 // Manual optimization function for the alpha components of DXT3.
 
-void optimize_block_dxt3(unsigned char *bitstring, unsigned char *alpha_values) {
+void optimize_block_alpha_dxt3(unsigned char *bitstring, unsigned char *alpha_values) {
 	uint64_t alpha_pixels = 0;
 	for (int i = 0; i < 16; i++) {
 		// Scale and round the alpha value to the values allowed by DXT3.

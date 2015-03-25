@@ -230,8 +230,8 @@ static char alpha_component_precision_plus_pbit(int mode) {
 // Mode 2	3	5	0		3 + 6 = 9	9 + 6 * 3 * 5 = 99	99
 // Mode 3	2	7	0		4 + 6 = 10	10 + 4 * 3 * 7 = 94	94
 // Mode 4	1	5	6		5 + 2 + 1 = 8	8 + 2 * 3 * 5 = 38	37 + 2 * 6 = 50
-// Mode 5	1	7	8		6 + 2 = 8	8 + 2 * 3 * 7 = 42	42 + 2 * 8 = 58
-// Mode	6	1	7	7		7		7 + 2 * 3 * 7 = 41	41 + 2 * 7 = 55
+// Mode 5	1	7	8		6 + 2 = 8	8 + 2 * 3 * 7 = 50	50 + 2 * 8 = 66
+// Mode	6	1	7	7		7		7 + 2 * 3 * 7 = 49	49 + 2 * 7 = 63
 // Mode 7	2	5	5		8 + 6 = 14	14 + 4 * 3 * 5 = 74	74 + 4 * 5 = 94
 
 static char components_in_qword0_table[8] = { 2, -1, 1, 1, 3, 3, 3, 2 };
@@ -497,6 +497,102 @@ void block4x4_bptc_set_mode(unsigned char *bitstring, int flags) {
 			return;
 		}
 		bit <<= 1;
+	}
+}
+
+static uint64_t clear_bits_uint64(uint64_t data, int bit0, int bit1) {
+	uint64_t mask = ~(((uint64_t)1 << (bit1 + 1)) - 1);
+	mask |= ((uint64_t)1 << bit0) - 1;
+	return data & mask;
+}
+
+static uint64_t set_bits_uint64(uint64_t data, int bit0, int bit1, uint64_t val) {
+	uint64_t d = clear_bits_uint64(data, bit0, bit1);
+	d |= val << bit0;
+	return d;
+}
+
+void bptc_set_block_colors(unsigned char *bitstring, int flags, unsigned int *colors) {
+	if ((flags & TWO_COLORS) == 0)
+		return;
+	uint64_t data0 = *(uint64_t *)&bitstring[0];
+	uint64_t data1 = *(uint64_t *)&bitstring[8];
+	if ((flags & BPTC_MODE_ALLOWED_ALL) == (1 << 3)) {
+		// Mode 3, 7 color bits.
+		// Color bits at index: 10
+		// Color bits end before index: 10 + 4 * 3 * 7 = 94
+		int r0 = pixel_get_r(colors[0]);
+		int g0 = pixel_get_g(colors[0]);
+		int b0 = pixel_get_b(colors[0]);
+		int r1 = pixel_get_r(colors[1]);
+		int g1 = pixel_get_g(colors[1]);
+		int b1 = pixel_get_b(colors[1]);
+		data0 = set_bits_uint64(data0, 10, 16, r0 >> 1);
+		data0 = set_bits_uint64(data0, 17, 23, r0 >> 1);
+		data0 = set_bits_uint64(data0, 24, 30, r1 >> 1);
+		data0 = set_bits_uint64(data0, 31, 37, r1 >> 1);
+		data0 = set_bits_uint64(data0, 38, 44, g0 >> 1);
+		data0 = set_bits_uint64(data0, 45, 51, g0 >> 1);
+		data0 = set_bits_uint64(data0, 52, 58, g1 >> 1);
+		data0 = set_bits_uint64(data0, 59, 63, (g1 >> 1) & 0x1F);
+		data1 = set_bits_uint64(data1, 0, 1, ((g1 >> 1) & 0x60) >> 5);
+		data1 = set_bits_uint64(data1, 2, 8, b0 >> 1);
+		data1 = set_bits_uint64(data1, 9, 15, b0 >> 1);
+		data1 = set_bits_uint64(data1, 16, 22, b1 >> 1);
+		data1 = set_bits_uint64(data1, 23, 29, b1 >> 1);
+		*(uint64_t *)&bitstring[0] = data0;
+		*(uint64_t *)&bitstring[8] = data1;
+//		printf("bptc_set_block_colors: Colors set for mode 3.\n");
+	}
+	else if ((flags & BPTC_MODE_ALLOWED_ALL) == (1 << 5)) {
+		// Mode 5, 7 color bits, 8 alpha bits.
+		// Color bits at index: 6 + 2 = 8
+		// Alpha bits at index: 8 + 2 * 3 * 7 = 50
+		// Alpha bits end before index: 50 + 2 * 8 = 66
+		int r0 = pixel_get_r(colors[0]);
+		int g0 = pixel_get_g(colors[0]);
+		int b0 = pixel_get_b(colors[0]);
+		int r1 = pixel_get_r(colors[1]);
+		int g1 = pixel_get_g(colors[1]);
+		int b1 = pixel_get_b(colors[1]);
+		data0 = set_bits_uint64(data0, 8, 14, r0 >> 1);
+		data0 = set_bits_uint64(data0, 15, 21, r1 >> 1);
+		data0 = set_bits_uint64(data0, 22, 28, g0 >> 1);
+		data0 = set_bits_uint64(data0, 29, 35, g0 >> 1);
+		data0 = set_bits_uint64(data0, 36, 42, b0 >> 1);
+		data0 = set_bits_uint64(data0, 43, 49, b1 >> 1);
+		if (flags & (MODES_ALLOWED_PUNCHTHROUGH_ONLY)) {
+			data0 = set_bits_uint64(data0, 50, 57, 0x00);
+			data0 = set_bits_uint64(data0, 58, 63, 0x3F);
+			data1 = set_bits_uint64(data1, 0, 1, 0x3);
+		}
+		*(uint64_t *)&bitstring[0] = data0;
+		*(uint64_t *)&bitstring[8] = data1;
+//		printf("bptc_set_block_colors: Colors set for mode 5.\n");
+	}
+	else if ((flags & BPTC_MODE_ALLOWED_ALL) == (1 << 6)) {
+		// Mode 5, 7 color bits, 7 alpha bits.
+		// Color bits at index 7.
+		// Alpha bits at index: 7 + 2 * 3 * 7 = 49
+		// Alpha bits end before index: 49 + 2 * 7 = 63
+		int r0 = pixel_get_r(colors[0]);
+		int g0 = pixel_get_g(colors[0]);
+		int b0 = pixel_get_b(colors[0]);
+		int r1 = pixel_get_r(colors[1]);
+		int g1 = pixel_get_g(colors[1]);
+		int b1 = pixel_get_b(colors[1]);
+		data0 = set_bits_uint64(data0, 7, 13, r0 >> 1);
+		data0 = set_bits_uint64(data0, 14, 20, r1 >> 1);
+		data0 = set_bits_uint64(data0, 21, 27, g0 >> 1);
+		data0 = set_bits_uint64(data0, 28, 34, g1 >> 1);
+		data0 = set_bits_uint64(data0, 35, 41, b0 >> 1);
+		data0 = set_bits_uint64(data0, 42, 48, b1 >> 1);
+		if (flags & (MODES_ALLOWED_PUNCHTHROUGH_ONLY)) {
+			data0 = set_bits_uint64(data0, 49, 55, 0x00);
+			data0 = set_bits_uint64(data0, 56, 62, 0x7F);
+		}
+		*(uint64_t *)&bitstring[0] = data0;
+//		printf("bptc_set_block_colors: Colors set for mode 6.\n");
 	}
 }
 

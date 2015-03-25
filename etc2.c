@@ -1150,7 +1150,7 @@ int draw_block4x4_signed_rg11_eac(const unsigned char *bitstring, unsigned int *
 
 // Manual optimization function for the alpha components of ETC2 PUNCHTHROUGH mode.
 
-void optimize_block_etc2_punchthrough(unsigned char *bitstring, unsigned char *alpha_values) {
+void optimize_block_alpha_etc2_punchthrough(unsigned char *bitstring, unsigned char *alpha_values) {
 	if (bitstring[3] & 2)
 		// Opaque mode. Don't bother optimizing this bitstring.
 		return;
@@ -1187,7 +1187,7 @@ void optimize_block_etc2_punchthrough(unsigned char *bitstring, unsigned char *a
 	bitstring[7] = pixel_index_word;
 }
 
-void optimize_block_etc2_eac(unsigned char *bitstring, unsigned char *alpha_values, int flags) {
+void optimize_block_alpha_etc2_eac(unsigned char *bitstring, unsigned char *alpha_values, int flags) {
 	// Optimize the alpha values if they are either 0x00 or 0xFF.
 	if ((flags & MODES_ALLOWED_PUNCHTHROUGH_ONLY) == 0)
 		return;
