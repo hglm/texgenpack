@@ -259,7 +259,7 @@ int genetic_parameters, float mutation_prob, float crossover_prob) {
 		nu_generations_second_pass = 4000;
 		nu_islands_second_pass = 8;
 	}
-	else if (option_compression_level < COMPRESSION_LEVEL_CLASS_2) {
+	else if (option_compression_level < COMPRESSION_LEVEL_CLASS_2 - 1) {
 		// Compression level class 1.
 		population_size = 128;
 		nu_generations = 50;
