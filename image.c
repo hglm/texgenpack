@@ -303,6 +303,9 @@ double compare_images(Image *image1, Image *image2) {
 	Texture texture;
 	texture.width = image1->width;
 	texture.height = image1->height;
+	TextureInfo info;
+	info.nu_components = nu_components;
+	texture.info = &info;
 	block_user_data.texture = &texture;
 	double error = 0;
 	for (int y = 0; y < image1->height; y += 4)
