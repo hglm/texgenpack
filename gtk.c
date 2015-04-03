@@ -1341,7 +1341,7 @@ static void menu_item_compression_settings_activate_cb(GtkMenuItem *menu_item, g
 
 void gui_create_window_layout() {
     gtk_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_title(GTK_WINDOW(gtk_window), "texview texture viewer");
+    gtk_window_set_title(GTK_WINDOW(gtk_window), "texgenpack-gui texture utility");
 
     g_signal_connect(G_OBJECT(gtk_window), "delete_event", G_CALLBACK(delete_event_cb), NULL);
 
