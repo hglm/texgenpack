@@ -748,7 +748,7 @@ void copy_image_to_uncompressed_texture(Image *image, int texture_type, Texture 
 			return;
 		}
 	}
-	if (image->bits_per_component == 8) {
+	else if (image->bits_per_component == 8) {
 		if (!(texture_type & TEXTURE_TYPE_16_BIT_COMPONENTS_BIT) && (texture_type & TEXTURE_TYPE_SIGNED_BIT)) {
 			// Convert image from signed or unsigned 8-bit format to texture with signed 8-bit format.
 			if (image->is_signed)
@@ -758,6 +758,17 @@ void copy_image_to_uncompressed_texture(Image *image, int texture_type, Texture 
 			clone_image(image, &cloned_image);
 			// Convert to signed 8-bit format.
 			convert_image_to_8_bit_format(&cloned_image, cloned_image.nu_components, 1);
+			copy_image_to_uncompressed_texture(&cloned_image, texture_type, texture);		
+			destroy_image(&cloned_image);
+			return;
+		}
+		else if (!(texture_type & TEXTURE_TYPE_16_BIT_COMPONENTS_BIT) && !(texture_type & TEXTURE_TYPE_SIGNED_BIT)
+		&& image->nu_components > texture->info->nu_components) {
+			// The uncompressed texture format has less components than the source image. 
+			Image cloned_image;
+			clone_image(image, &cloned_image);
+			// Convert to unsigned 8-bit format, losing any extra components.
+			convert_image_to_8_bit_format(&cloned_image, cloned_image.nu_components, 0);
 			copy_image_to_uncompressed_texture(&cloned_image, texture_type, texture);		
 			destroy_image(&cloned_image);
 			return;
@@ -787,6 +798,7 @@ void copy_image_to_uncompressed_texture(Image *image, int texture_type, Texture 
 copy :
 	texture->pixels = (unsigned int *)malloc(image->height * image->width * 4);
 	if (texture_type == TEXTURE_TYPE_UNCOMPRESSED_ARGB8) {
+		// Reverse component order.
 		for (int y = 0; y < image->height; y++)
 			for (int x = 0; x < image->width; x++) {
 				uint32_t pixel = image->pixels[y * image->extended_width + x];
@@ -861,7 +873,7 @@ static float clamp_0to1(float x) {
 void calculate_image_dynamic_range(Image *image, float *range_min_out, float *range_max_out) {
 	calculate_half_float_table();
 	float range_min = FLT_MAX;
-	float range_max = FLT_MIN;
+	float range_max = - FLT_MAX;
 	for (int y = 0; y < image->height; y++)
 		for (int x = 0; x < image->width; x++) {
 			uint16_t *pix = (uint16_t *)&image->pixels[(y * image->extended_width + x) * 2];

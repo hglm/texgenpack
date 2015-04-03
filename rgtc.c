@@ -110,7 +110,7 @@ int offset, int flags) {
 			case 7 : result = 127; break;
 			}
 		// Map from [-127, 127] to [-32768, 32767].
-		*((uint16_t *)&image_buffer[i] + offset) = (uint16_t)(int16_t)((result + 127) * 65535 / 254 - 32768);
+		*((int16_t *)&image_buffer[i] + offset) = (int16_t)((result + 127) * 65535 / 254 - 32768);
 		bits >>= 3;
 	}
 	return 1;

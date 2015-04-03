@@ -1479,7 +1479,7 @@ double compare_block_4x4_rgba_half_float_hdr(unsigned int *image_buffer, BlockUs
 	double error = 0;
 	double error_alpha = 0;
 	float range_min = FLT_MAX;
-	float range_max = FLT_MIN;
+	float range_max = - FLT_MAX;
 	for (int y = 0; y < h; y++) {
 		for (int x = 0; x < w; x++) {
 			uint16_t *pix1p = (uint16_t *)&pix1[x];
@@ -1530,7 +1530,7 @@ double compare_block_4x4_rgb_half_float_hdr(unsigned int *image_buffer, BlockUse
 		user_data->x_offset;
 	double error = 0;
 	float range_min = FLT_MAX;
-	float range_max = FLT_MIN;
+	float range_max = - FLT_MAX;
 	for (int y = 0; y < h; y++) {
 		for (int x = 0; x < w; x++) {
 			uint16_t *pix1p = (uint16_t *)&pix1[x];
