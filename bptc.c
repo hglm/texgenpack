@@ -939,6 +939,27 @@ int block4x4_bptc_float_get_mode(const unsigned char *bitstring) {
 	return mode;
 }
 
+static uint8_t bptc_float_set_mode_table[14] = {
+	0, 1, 2, 6, 10, 14, 18, 22, 26, 30, 3, 7, 11, 15
+};
+
+void block4x4_bptc_float_set_mode(unsigned char *bitstring, int flags) {
+	int mode_flags = flags & BPTC_FLOAT_MODE_ALLOWED_ALL;
+	if (mode_flags & 0x3) {
+		// Set mode 0 or 1.
+		bitstring[0] = (bitstring[0] & 0xFC) | ((mode_flags & 0x2) >> 1);
+		return;
+	}
+	uint8_t byte0 = bitstring[0];
+	byte0 &= 0xE0;
+	for (int i = 2; i < 14; i++)
+		if (flags & (1 << i)) {
+			byte0 |= bptc_float_set_mode_table[i];
+			bitstring[0] = byte0;
+			return;
+		}
+}
+
 int draw_block4x4_bptc_float_shared(const unsigned char *bitstring, unsigned int *image_buffer, int signed_flag, int flags) {
 	Block block;
 	block.data0 = *(uint64_t *)&bitstring[0];

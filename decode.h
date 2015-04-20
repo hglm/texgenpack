@@ -89,6 +89,7 @@ int draw_block4x4_bptc_float(const unsigned char *bitstring, unsigned int *image
 int draw_block4x4_bptc_signed_float(const unsigned char *bitstring, unsigned int *image_buffer, int flags);
 int block4x4_bptc_float_get_mode(const unsigned char *bitstring);
 void block4x4_bptc_set_mode(unsigned char *bitstring, int flags);
+void block4x4_bptc_float_set_mode(unsigned char *bitstring, int flags);
 // Try to preinitialize colors for particular modes.
 void bptc_set_block_colors(unsigned char *bitstring, int flags, unsigned int *colors);
 

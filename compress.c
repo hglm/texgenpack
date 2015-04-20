@@ -484,7 +484,7 @@ again :
 	fgen_seed_random(pop, bitstring);
 	if (user_data->texture->set_mode_function != NULL)
 		user_data->texture->set_mode_function(bitstring, user_data->flags);
-	unsigned int image_buffer[16];
+	unsigned int image_buffer[32];
 	bool valid;
 	valid = user_data->texture->decoding_function(bitstring, image_buffer, user_data->flags);
 	nu_tries++;
@@ -585,7 +585,7 @@ again :
 	if (user_data->texture->set_mode_function != NULL) {
 		user_data->texture->set_mode_function(bitstring, user_data->flags);
 	}
-	unsigned int image_buffer[16];
+	unsigned int image_buffer[32];
 	bool valid;
 	valid = user_data->texture->decoding_function(bitstring, image_buffer, user_data->flags);
 	nu_tries++;

@@ -345,10 +345,12 @@ void set_texture_decoding_function(Texture *texture, Image *image) {
 	case TEXTURE_TYPE_BPTC_FLOAT :
 		decoding_func = draw_block4x4_bptc_float;
 		get_mode_func = block4x4_bptc_float_get_mode;
+		set_mode_func = block4x4_bptc_float_set_mode;
 		break;
 	case TEXTURE_TYPE_BPTC_SIGNED_FLOAT :
 		decoding_func = draw_block4x4_bptc_signed_float;
 		get_mode_func = block4x4_bptc_float_get_mode;
+		set_mode_func = block4x4_bptc_float_set_mode;
 		break;
 	case TEXTURE_TYPE_RGTC1 :
 		decoding_func = draw_block4x4_rgtc1;
