@@ -188,6 +188,10 @@ int load_ktx_file(const char *filename, int max_mipmaps, Texture *texture) {
 		}
 		int n = (extended_height / block_height) * (extended_width / block_width);
 		if (type != TEXTURE_TYPE_UNCOMPRESSED_RGB8 && type != TEXTURE_TYPE_UNCOMPRESSED_RGB_HALF_FLOAT &&
+		type != TEXTURE_TYPE_UNCOMPRESSED_R8 &&	type != TEXTURE_TYPE_UNCOMPRESSED_RG8 &&
+		type != TEXTURE_TYPE_UNCOMPRESSED_SIGNED_R8 && type != TEXTURE_TYPE_UNCOMPRESSED_SIGNED_RG8 &&
+		type != TEXTURE_TYPE_UNCOMPRESSED_R16 && type != TEXTURE_TYPE_UNCOMPRESSED_SIGNED_R16 &&
+		type != TEXTURE_TYPE_UNCOMPRESSED_R_HALF_FLOAT &&
 		*(int *)&image_size[0] != n * (ktx_block_size / 8)) {
 			printf("Error -- image size field of mipmap level %d does not match (%d vs %d).\n",
 				i, *(int *)&image_size[0], n * (ktx_block_size / 8));
