@@ -187,7 +187,7 @@ int draw_block4x4_dxt5(const unsigned char *bitstring, unsigned int *image_buffe
 			case 4 : alpha = (4 * alpha0 + 3 * alpha1) / 7; break;
 			case 5 : alpha = (3 * alpha0 + 4 * alpha1) / 7; break;
 			case 6 : alpha = (2 * alpha0 + 5 * alpha1) / 7; break;
-			case 7 : alpha = (1 * alpha0 + 2 * alpha1) / 7; break;
+			case 7 : alpha = (1 * alpha0 + 6 * alpha1) / 7; break;
 			}
 		else
 			switch (code) {
