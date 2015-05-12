@@ -71,7 +71,7 @@ int option_perceptive = 1;
 int option_deterministic = 0;
 
 static char *instructions1 =
-"texgenpack v0.9.3 -- Texture conversion and compression using a genetic algorithm.\n"
+"texgenpack v0.9.4 -- Texture conversion and compression using a genetic algorithm.\n"
 "Usage: texgenpack <command> <options> <source filename> <destination filename>.\n"
 "\n"
 "Commands:\n";
