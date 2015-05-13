@@ -277,9 +277,12 @@ static void extract_endpoints(int mode, int nu_subsets, Block *block, uint8_t *e
 	// Alpha component.
 	if (alpha_component_precision(mode) > 0) {
 		// For mode 7, the alpha data is wholly in data1.
-		// For modes 4, 5 and 6, the alpha data is wholly in data0.
+		// For modes 4 and 6, the alpha data is wholly in data0.
+		// For mode 5, the alpha data is in data0 and data1.
 		if (mode == 7)
 			data = block->data1 >> (block->index - 64);
+		else if (mode == 5)
+			data = (block->data0 >> block->index) | ((block->data1 & 0x3) << 14);
 		else
 			data = block->data0 >> block->index;
 		uint8_t alpha_precision = alpha_component_precision(mode);
