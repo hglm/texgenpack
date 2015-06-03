@@ -428,7 +428,7 @@ static void draw_block4x4_rgb8_etc2_planar_mode(const unsigned char *bitstring, 
 	int GO = ((bitstring[0] & 0x1) << 6) | ((bitstring[1] & 0x7E) >> 1);
 	int BO = ((bitstring[1] & 0x1) << 5) | (bitstring[2] & 0x18) | ((bitstring[2] & 0x03) << 1) |
 		((bitstring[3] & 0x80) >> 7);
-	int RH = ((bitstring[3] & 0x7B) >> 1) | (bitstring[3] & 0x1);
+	int RH = ((bitstring[3] & 0x7C) >> 1) | (bitstring[3] & 0x1);
 	int GH = (bitstring[4] & 0xFE) >> 1;
 	int BH = ((bitstring[4] & 0x1) << 5) | ((bitstring[5] & 0xF8) >> 3);
 	int RV = ((bitstring[5] & 0x7) << 3) | ((bitstring[6] & 0xE0) >> 5);
@@ -774,7 +774,7 @@ static unsigned int punchthrough_mask_table[4] = {
 	int pixel_index = ((pixel_index_word & (1 << i)) >> i) \
 		| ((pixel_index_word & (0x10000 << i)) >> (16 + i - 1)); \
 	int r, g, b; \
-	int modifier = modifier_table[table_codeword1][pixel_index]; \
+	int modifier = punchthrough_modifier_table[table_codeword1][pixel_index]; \
 	r = clamp(base_color_subblock1_R + modifier); \
 	g = clamp(base_color_subblock1_G + modifier); \
 	b = clamp(base_color_subblock1_B + modifier); \
@@ -788,7 +788,7 @@ static unsigned int punchthrough_mask_table[4] = {
 	int pixel_index = ((pixel_index_word & (1 << i)) >> i) \
 		| ((pixel_index_word & (0x10000 << i)) >> (16 + i - 1)); \
 	int r, g, b; \
-	int modifier = modifier_table[table_codeword2][pixel_index]; \
+	int modifier = punchthrough_modifier_table[table_codeword2][pixel_index]; \
 	r = clamp(base_color_subblock2_R + modifier); \
 	g = clamp(base_color_subblock2_G + modifier); \
 	b = clamp(base_color_subblock2_B + modifier); \
