@@ -43,35 +43,27 @@ void load_pkm_file(const char *filename, Texture *texture) {
 	switch (texture_type) {
 		case 0:
 			texture->type = TEXTURE_TYPE_ETC1;
-			texture->info = match_texture_type(TEXTURE_TYPE_ETC1);
 			break;
 		case 1:
 			texture->type = TEXTURE_TYPE_ETC2_RGB8;
-			texture->info = match_texture_type(TEXTURE_TYPE_ETC2_RGB8);
 			break;
 		case 3:
 			texture->type = TEXTURE_TYPE_ETC2_EAC;
-			texture->info = match_texture_type(TEXTURE_TYPE_ETC2_EAC);
 			break;
 		case 4:
 			texture->type = TEXTURE_TYPE_ETC2_PUNCHTHROUGH;
-			texture->info = match_texture_type(TEXTURE_TYPE_ETC2_PUNCHTHROUGH);
 			break;
 		case 5:
 			texture->type = TEXTURE_TYPE_R11_EAC;
-			texture->info = match_texture_type(TEXTURE_TYPE_R11_EAC);
 			break;
 		case 6:
 			texture->type = TEXTURE_TYPE_RG11_EAC;
-			texture->info = match_texture_type(TEXTURE_TYPE_RG11_EAC);
 			break;
 		case 7:
 			texture->type = TEXTURE_TYPE_SIGNED_R11_EAC;
-			texture->info = match_texture_type(TEXTURE_TYPE_SIGNED_R11_EAC);
 			break;
 		case 8:
 			texture->type = TEXTURE_TYPE_SIGNED_RG11_EAC;
-			texture->info = match_texture_type(TEXTURE_TYPE_SIGNED_RG11_EAC);
 			break;
 		default:
 			printf("Error -- unsupported format PKM format.\n");
@@ -87,6 +79,7 @@ void load_pkm_file(const char *filename, Texture *texture) {
 	texture->width = width;
 	texture->height = height;
 
+	texture->info = match_texture_type(texture->type);
 	texture->block_width = texture->info->block_width;
 	texture->block_height = texture->info->block_height;
 	texture->bits_per_block = texture->info->bits_per_block;
