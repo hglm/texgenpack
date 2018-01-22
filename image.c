@@ -61,7 +61,7 @@ void load_image(const char *filename, int filetype, Image *image) {
 		destroy_texture(&texture);
 	}
 	else {
-		switch (filetype) { 
+		switch (filetype) {
 //		case FILE_TYPE_PPM :
 //			load_ppm_file(filename, image);
 //			break;
@@ -118,7 +118,7 @@ int load_mipmap_images(const char *filename, int filetype, int max_images, Image
 // Save image file.
 
 void save_image(Image *image, const char *filename, int filetype) {
-	switch (filetype) { 
+	switch (filetype) {
 //	case FILE_TYPE_PPM :
 //		load_ppm_file(filename, image);
 //		break;
@@ -219,7 +219,7 @@ double compare_images(Image *image1, Image *image2) {
 	}
 	if (image1->is_half_float ^ image2->is_half_float) {
 		// Allow exception for the case that image1 is half-float and image2 is in regular format.
-		if (!(image1->is_half_float && image2->bits_per_component == 8)) { 
+		if (!(image1->is_half_float && image2->bits_per_component == 8)) {
 			printf("Warning -- cannot compare regular and half-float images. Returning RMSE of 0 "
 				"by default. Try the --half-float option.\n");
 			return 0;
@@ -456,6 +456,7 @@ void convert_texture_to_image(Texture *texture, Image *image) {
 	if (texture->type & TEXTURE_TYPE_HALF_FLOAT_BIT)
 		bpp = 8;	// 64-bit pixels
 	image->pixels = (unsigned int *)malloc(n * texture->block_width * texture->block_height * bpp);
+	int size = n * texture->block_width * texture->block_height * bpp;
 	image->alpha_bits = 0;
 	if (texture->type & TEXTURE_TYPE_ALPHA_BIT) {
 		if (texture->type & TEXTURE_TYPE_HALF_FLOAT_BIT)
@@ -489,9 +490,9 @@ void convert_texture_to_image(Texture *texture, Image *image) {
 		flags = BPTC_FLOAT_MODE_ALLOWED_ALL;
 	for (int y = 0; y < texture->extended_height; y += texture->block_height)
 		for (int x = 0; x < texture->extended_width; x += texture->block_width) {
-			unsigned char *bitstring = (unsigned char *)&texture->pixels[
-				((y / texture->block_height) * (texture->extended_width / texture->block_width) +
-				(x / texture->block_width)) * (texture->info->internal_bits_per_block / 32)];
+			unsigned int offset = ((y / texture->block_height) * (texture->extended_width / texture->block_width) +
+				(x / texture->block_width)) * (texture->info->internal_bits_per_block / 32);
+			unsigned char *bitstring = (unsigned char *)&texture->pixels[offset];
 			int r = texture->decoding_function(bitstring, buffer, flags);
 			if (r == 0)
 				// If the block mode is not allowed, display a black block.
@@ -668,7 +669,7 @@ void copy_image_to_uncompressed_texture(Image *image, int texture_type, Texture 
 		Image cloned_image;
 		clone_image(image, &cloned_image);
 		convert_image_to_half_float(&cloned_image);
-		copy_image_to_uncompressed_texture(&cloned_image, texture_type, texture);		
+		copy_image_to_uncompressed_texture(&cloned_image, texture_type, texture);
 		destroy_image(&cloned_image);
 		return;
 	}
@@ -689,7 +690,7 @@ void copy_image_to_uncompressed_texture(Image *image, int texture_type, Texture 
 		// Convert to signed if necessary.
 		if (texture_type & TEXTURE_TYPE_SIGNED_BIT)
 			convert_image_to_8_bit_format(&cloned_image, cloned_image.nu_components, 1);
-		copy_image_to_uncompressed_texture(&cloned_image, texture_type, texture);		
+		copy_image_to_uncompressed_texture(&cloned_image, texture_type, texture);
 		destroy_image(&cloned_image);
 		return;
 	}
@@ -709,7 +710,7 @@ void copy_image_to_uncompressed_texture(Image *image, int texture_type, Texture 
 			else
 				// Convert to signed 8-bit format.
 				convert_image_to_8_bit_format(&cloned_image, cloned_image.nu_components, 1);
-			copy_image_to_uncompressed_texture(&cloned_image, texture_type, texture);		
+			copy_image_to_uncompressed_texture(&cloned_image, texture_type, texture);
 			destroy_image(&cloned_image);
 			return;
 		}
@@ -730,7 +731,7 @@ void copy_image_to_uncompressed_texture(Image *image, int texture_type, Texture 
 			else
 				// Convert to signed 8-bit format.
 				convert_image_to_16_bit_format(&cloned_image, cloned_image.nu_components, 1);
-			copy_image_to_uncompressed_texture(&cloned_image, texture_type, texture);		
+			copy_image_to_uncompressed_texture(&cloned_image, texture_type, texture);
 			destroy_image(&cloned_image);
 			return;
 		}
@@ -743,7 +744,7 @@ void copy_image_to_uncompressed_texture(Image *image, int texture_type, Texture 
 			Image cloned_image;
 			clone_image(image, &cloned_image);
 			convert_image_to_half_float(&cloned_image);
-			copy_image_to_uncompressed_texture(&cloned_image, texture_type, texture);		
+			copy_image_to_uncompressed_texture(&cloned_image, texture_type, texture);
 			destroy_image(&cloned_image);
 			return;
 		}
@@ -758,18 +759,18 @@ void copy_image_to_uncompressed_texture(Image *image, int texture_type, Texture 
 			clone_image(image, &cloned_image);
 			// Convert to signed 8-bit format.
 			convert_image_to_8_bit_format(&cloned_image, cloned_image.nu_components, 1);
-			copy_image_to_uncompressed_texture(&cloned_image, texture_type, texture);		
+			copy_image_to_uncompressed_texture(&cloned_image, texture_type, texture);
 			destroy_image(&cloned_image);
 			return;
 		}
 		else if (!(texture_type & TEXTURE_TYPE_16_BIT_COMPONENTS_BIT) && !(texture_type & TEXTURE_TYPE_SIGNED_BIT)
 		&& image->nu_components > texture->info->nu_components) {
-			// The uncompressed texture format has less components than the source image. 
+			// The uncompressed texture format has less components than the source image.
 			Image cloned_image;
 			clone_image(image, &cloned_image);
 			// Convert to unsigned 8-bit format, losing any extra components.
 			convert_image_to_8_bit_format(&cloned_image, cloned_image.nu_components, 0);
-			copy_image_to_uncompressed_texture(&cloned_image, texture_type, texture);		
+			copy_image_to_uncompressed_texture(&cloned_image, texture_type, texture);
 			destroy_image(&cloned_image);
 			return;
 		}
@@ -786,7 +787,7 @@ void copy_image_to_uncompressed_texture(Image *image, int texture_type, Texture 
 			else
 				// Convert to signed 8-bit format.
 				convert_image_to_16_bit_format(&cloned_image, cloned_image.nu_components, 1);
-			copy_image_to_uncompressed_texture(&cloned_image, texture_type, texture);		
+			copy_image_to_uncompressed_texture(&cloned_image, texture_type, texture);
 			destroy_image(&cloned_image);
 			return;
 		}
@@ -868,7 +869,7 @@ static float clamp_0to1(float x) {
 	if (x > 1.0)
 		return 1.0;
 	return x;
-} 
+}
 
 void calculate_image_dynamic_range(Image *image, float *range_min_out, float *range_max_out) {
 	calculate_half_float_table();
@@ -1159,7 +1160,7 @@ void convert_image_from_8_bit_format(Image *image) {
 	Image new_image;
 	new_image = *image;	// Copy fields.
 	new_image.nu_components = 3;
-	new_image.is_signed = 0; 
+	new_image.is_signed = 0;
 	new_image.pixels = (unsigned int *)malloc(image->extended_width * image->extended_height * 4);
 	for (int y = 0; y < image->height; y++)
 		for (int x = 0; x < image->width; x++) {

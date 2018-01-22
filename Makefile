@@ -5,8 +5,8 @@ INSTALL_DIR = /usr/bin
 
 CFLAGS = -std=gnu99 -Ofast
 LFLAGS = -O
-#CFLAGS = -std=gnu99 -ggdb
-#LFLAGS = -ggdb
+# CFLAGS = -std=gnu99 -ggdb
+# LFLAGS = -ggdb
 PKG_CONFIG_CFLAGS = `pkg-config --cflags gtk+-3.0`
 PKG_CONFIG_LFLAGS = `pkg-config --libs gtk+-3.0`
 # For MinGW with GTK installed, uncomment the following line.
