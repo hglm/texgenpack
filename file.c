@@ -66,7 +66,7 @@ void load_pkm_file(const char *filename, Texture *texture) {
 			texture->type = TEXTURE_TYPE_SIGNED_RG11_EAC;
 			break;
 		default:
-			printf("Error -- unsupported format PKM format.\n");
+			printf("Error -- unsupported PKM format.\n");
 			exit(1);
 	}
 
