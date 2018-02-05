@@ -38,33 +38,58 @@ void load_pkm_file(const char *filename, Texture *texture) {
 		printf("Error -- couldn't find PKM signature.\n");
 		exit(1);
 	}
+
 	int texture_type = ((int)header[6] << 8) | header[7];
-	if (texture_type != 0 && texture_type != 1) {
-		printf("Error -- unsupported format (only ETC1 and ETC2 RGB8 supported).\n");
-		exit(1);
+	switch (texture_type) {
+		case 0:
+			texture->type = TEXTURE_TYPE_ETC1;
+			break;
+		case 1:
+			texture->type = TEXTURE_TYPE_ETC2_RGB8;
+			break;
+		case 3:
+			texture->type = TEXTURE_TYPE_ETC2_EAC;
+			break;
+		case 4:
+			texture->type = TEXTURE_TYPE_ETC2_PUNCHTHROUGH;
+			break;
+		case 5:
+			texture->type = TEXTURE_TYPE_R11_EAC;
+			break;
+		case 6:
+			texture->type = TEXTURE_TYPE_RG11_EAC;
+			break;
+		case 7:
+			texture->type = TEXTURE_TYPE_SIGNED_R11_EAC;
+			break;
+		case 8:
+			texture->type = TEXTURE_TYPE_SIGNED_RG11_EAC;
+			break;
+		default:
+			printf("Error -- unsupported PKM format.\n");
+			exit(1);
 	}
+
 	int ext_width = ((int)header[8] << 8) | header[9];
 	int ext_height = ((int)header[10] << 8) | header[11];
 	int width = ((int)header[12] << 8) | header[13];
 	int height = ((int)header[14] << 8) | header[15];
-	int n = (ext_width / 4) * (ext_height / 4);
-	texture->bits_per_block = 64;
+	texture->extended_width = ext_width;
+	texture->extended_height = ext_height;
+	texture->width = width;
+	texture->height = height;
+
+	texture->info = match_texture_type(texture->type);
+	texture->block_width = texture->info->block_width;
+	texture->block_height = texture->info->block_height;
+	texture->bits_per_block = texture->info->bits_per_block;
+	int n = (ext_width / texture->block_width) * (ext_height / texture->block_height);
 	texture->pixels = (unsigned int *)malloc(n * (texture->bits_per_block / 8));
 	if (fread(texture->pixels, 1, n * (texture->bits_per_block / 8), f) < n * (texture->bits_per_block / 8)) {
 		printf("Error reading file %s.\n", filename);
 		exit (1);
 	}
 	fclose(f);
-	texture->extended_width = ext_width;
-	texture->extended_height = ext_height;
-	texture->width = width;
-	texture->height = height;
-	texture->block_width = 4;
-	texture->block_height = 4;
-	if (texture->type == 0)
-		texture->type = TEXTURE_TYPE_ETC1;
-	else
-		texture->type = TEXTURE_TYPE_ETC2_RGB8;
 }
 
 // Save a .pkm texture.
@@ -212,7 +237,7 @@ int load_ktx_file(const char *filename, int max_mipmaps, Texture *texture) {
 			// or 48-bit pixels to 64-bit pixels.
 			int bpp = ktx_block_size / 8;
 			int row_size = (width * bpp + 3) & ~3;
-			int row_size_no_padding = width * bpp; 
+			int row_size_no_padding = width * bpp;
 			if (*(int *)&image_size[0] != height * row_size) {
 				if (*(int *)&image_size[0] == height * row_size_no_padding) {
 					// This file violates .ktx specification by have no 32-bit row alignment.
@@ -871,7 +896,7 @@ void load_png_file(const char *filename, Image *image) {
 	if (!png_ptr) {
 		printf("png_create_read_struct failed\n");
 		exit(1);
-	}   
+	}
 
 	info_ptr = png_create_info_struct(png_ptr);
 	if (!info_ptr) {
@@ -1026,7 +1051,7 @@ void save_png_file(Image *image, const char *filename) {
 		PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
 
 	png_write_info(png_ptr, info_ptr);
-	
+
 	if (t == PNG_COLOR_TYPE_GRAY || image->alpha_bits == 0)
 		// We have RGB (or one component) data in 32-bit pixels with the last byte
                 // or bytes unused.

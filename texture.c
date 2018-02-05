@@ -84,7 +84,7 @@ static TextureInfo texture_info[NU_ITEMS] = {
 	{ TEXTURE_TYPE_ETC1,				1, 0,	"etc1", "",			4, 4, 64, 64, 0, 3,	0x8D64, 0,	0,		"", 0,		0xFF, 0xFF00, 0xFF0000, 0},
 	{ TEXTURE_TYPE_ETC2_RGB8,			1, 0,	"etc2_rgb8", "etc2",		4, 4, 64, 64, 0, 3,	0x9274, 0,	0,		"", 0,		0xFF, 0xFF00, 0xFF0000, 0},
 	{ TEXTURE_TYPE_ETC2_EAC,			1, 0,	"etc2_eac", "eac",		4, 4, 128, 128, 8, 4,	0x9278, 0,	0,		"", 0,		0xFF, 0xFF00, 0xFF0000, 0xFF000000 },
-	{ TEXTURE_TYPE_ETC2_PUNCHTHROUGH,		1, 0,	"etc2_punchthrough", "",	4, 4, 64, 64, 1, 4,	0x9275, 0,	0,		"", 0,		0xFF, 0xFF00, 0xFF0000, 0xFF000000 },
+	{ TEXTURE_TYPE_ETC2_PUNCHTHROUGH,		1, 0,	"etc2_punchthrough", "",	4, 4, 64, 64, 1, 4,	0x9276, 0,	0,		"", 0,		0xFF, 0xFF00, 0xFF0000, 0xFF000000 },
 	{ TEXTURE_TYPE_R11_EAC,				1, 0, 	"r11_eac", "",			4, 4, 64, 64, 0, 1,	0x9270, 0,	0,		"", 0,		0xFFFF, 0, 0, 0 },
 	{ TEXTURE_TYPE_RG11_EAC,			1, 0,	"rg11_eac", "",			4, 4, 128, 128, 0, 2,	0x9272, 0,	0,		"", 0,		0xFFFF, 0xFFFF0000, 0, 0 },
 	{ TEXTURE_TYPE_SIGNED_R11_EAC,			1, 0,	"signed_r11_eac", "",		4, 4, 64, 64, 0, 1,	0x9271, 0,	0,		"", 0,		0xFFFF, 0, 0, 0 },
@@ -151,11 +151,11 @@ static DDSTextureFormatSynonym dds_synonym[NU_DDS_SYNONYMS] = {
 	{ TEXTURE_TYPE_UNCOMPRESSED_RG16, "DX10", 36 },
 	{ TEXTURE_TYPE_UNCOMPRESSED_R16, "DX10", 57 },
 	{ TEXTURE_TYPE_UNCOMPRESSED_SIGNED_RG16, "DX10", 38 },
-	{ TEXTURE_TYPE_UNCOMPRESSED_SIGNED_R16, "DX10", 59 }, 
+	{ TEXTURE_TYPE_UNCOMPRESSED_SIGNED_R16, "DX10", 59 },
 	{ TEXTURE_TYPE_UNCOMPRESSED_RG8, "DX10", 50 },
 	{ TEXTURE_TYPE_UNCOMPRESSED_R8, "DX10", 62 },
 	{ TEXTURE_TYPE_UNCOMPRESSED_SIGNED_RG8, "DX10", 52 },
-	{ TEXTURE_TYPE_UNCOMPRESSED_SIGNED_R8, "DX10", 64 }, 
+	{ TEXTURE_TYPE_UNCOMPRESSED_SIGNED_R8, "DX10", 64 },
 	{ TEXTURE_TYPE_DXT1, "DX10", 70 },
 	{ TEXTURE_TYPE_DXT1, "DX10", 71 },
 	{ TEXTURE_TYPE_DXT3, "DX10", 73 },
@@ -308,18 +308,18 @@ void set_texture_decoding_function(Texture *texture, Image *image) {
 		decoding_func = draw_block4x4_dxt5;
 		break;
 	case TEXTURE_TYPE_DXT1A :
-		decoding_func = draw_block4x4_dxt1a;	
+		decoding_func = draw_block4x4_dxt1a;
 		break;
 	case TEXTURE_TYPE_UNCOMPRESSED_RGB8 :
 	case TEXTURE_TYPE_UNCOMPRESSED_RGBA8 :
 	case TEXTURE_TYPE_UNCOMPRESSED_RG8 :
 	case TEXTURE_TYPE_UNCOMPRESSED_R8 :
 	case TEXTURE_TYPE_UNCOMPRESSED_RG16 :
-	case TEXTURE_TYPE_UNCOMPRESSED_R16 : 
+	case TEXTURE_TYPE_UNCOMPRESSED_R16 :
 	case TEXTURE_TYPE_UNCOMPRESSED_SIGNED_RG8 :
 	case TEXTURE_TYPE_UNCOMPRESSED_SIGNED_R8 :
 	case TEXTURE_TYPE_UNCOMPRESSED_SIGNED_RG16 :
-	case TEXTURE_TYPE_UNCOMPRESSED_SIGNED_R16 : 
+	case TEXTURE_TYPE_UNCOMPRESSED_SIGNED_R16 :
 		decoding_func = draw_block4x4_uncompressed;
 		break;
 	case TEXTURE_TYPE_UNCOMPRESSED_ARGB8 :
